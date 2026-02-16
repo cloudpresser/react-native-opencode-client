@@ -39,3 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Android signing
+*.jks
+*.keystore
+*.b64
+credentials.json

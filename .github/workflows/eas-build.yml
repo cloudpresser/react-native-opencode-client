@@ -42,6 +42,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup Android Keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android-keystore.jks
+          echo "Keystore created successfully"
+
+      - name: Configure EAS Credentials
+        run: |
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "android-keystore.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          echo "Credentials configured"
+
       - name: Build Android APK (Preview)
         if: startsWith(github.ref, 'refs/tags/v')
         id: build_tag
