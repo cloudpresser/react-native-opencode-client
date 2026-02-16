@@ -1,12 +1,18 @@
 {
   "expo": {
-    "name": "create-a-react-native-opencode-client",
-    "slug": "create-a-react-native-opencode-client",
+    "name": "OpenCode Client",
+    "slug": "react-native-opencode-client",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "owner": "cloudpresser",
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id-will-be-generated"
+      }
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
