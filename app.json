@@ -14,9 +14,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.cloudpresser.opencodeclient",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.cloudpresser.opencodeclient",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
