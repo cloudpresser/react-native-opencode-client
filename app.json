@@ -8,11 +8,6 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "owner": "cloudpresser",
-    "extra": {
-      "eas": {
-        "projectId": "your-project-id-will-be-generated"
-      }
-    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -31,6 +26,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4be15419-5abd-4485-af2d-c98d6bc47ce9"
+      }
     }
   }
 }
