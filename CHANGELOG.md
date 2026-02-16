@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.0.2...v1.1.0) (2026-02-16)
+
+
+### Features
+
+* attach APK to GitHub releases and configure EAS credentials ([e8fab02](https://github.com/cloudpresser/react-native-opencode-client/commit/e8fab02347dbd4db6c80ddc7a625f782b06a4b04))
+
 ## [1.0.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.0.1...v1.0.2) (2026-02-16)
 
 
