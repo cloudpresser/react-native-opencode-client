@@ -1,26 +1,45 @@
-import { createOpencode } from 'ai-sdk-provider-opencode-sdk';
-import { streamText } from 'ai';
 import { Server, Session, GitFile } from '../types';
+import EventSource from 'react-native-sse';
+
+interface MessagePart {
+  type: 'text' | 'image' | 'file';
+  text?: string;
+  image?: string;
+  data?: string;
+  mimeType?: string;
+}
+
+interface Message {
+  info: {
+    id: string;
+    sessionID: string;
+    role: 'user' | 'assistant';
+    createdAt: string;
+  };
+  parts: MessagePart[];
+}
+
+interface FileDiff {
+  path: string;
+  status: 'M' | 'A' | 'D' | 'R';
+  diff?: string;
+}
 
 export class OpenCodeService {
   private baseUrl: string;
-  private apiKey?: string;
+  private username: string;
+  private password?: string;
 
   constructor(server: Server) {
     const protocol = server.useSSL ? 'https' : 'http';
     this.baseUrl = `${protocol}://${server.host}:${server.port}`;
-    this.apiKey = server.apiKey;
-  }
-
-  getProvider() {
-    return createOpencode({
-      baseUrl: this.baseUrl,
-    });
+    this.username = 'opencode';
+    this.password = server.apiKey;
   }
 
   async getSessions(): Promise<Session[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/sessions`, {
+      const response = await fetch(`${this.baseUrl}/session`, {
         headers: this.getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch sessions');
@@ -33,7 +52,7 @@ export class OpenCodeService {
 
   async createSession(title: string): Promise<Session | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/sessions`, {
+      const response = await fetch(`${this.baseUrl}/session`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ title }),
@@ -48,7 +67,7 @@ export class OpenCodeService {
 
   async deleteSession(sessionId: string): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/sessions/${sessionId}`, {
+      const response = await fetch(`${this.baseUrl}/session/${sessionId}`, {
         method: 'DELETE',
         headers: this.getHeaders(),
       });
@@ -61,76 +80,97 @@ export class OpenCodeService {
 
   async getGitStatus(sessionId: string): Promise<GitFile[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/sessions/${sessionId}/git/status`, {
+      const response = await fetch(`${this.baseUrl}/file/status`, {
         headers: this.getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch git status');
-      return response.json();
+      const data = await response.json();
+      
+      // Convert git status to our GitFile format
+      return data.files?.map((file: any) => ({
+        path: file.path,
+        status: file.status,
+        additions: file.additions || 0,
+        deletions: file.deletions || 0,
+      })) || [];
     } catch (error) {
       console.error('Error fetching git status:', error);
       return [];
     }
   }
 
-  async getGitDiff(sessionId: string, filePath: string): Promise<string> {
+  async getGitDiff(sessionId: string, filePath?: string): Promise<FileDiff[]> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/sessions/${sessionId}/git/diff?file=${encodeURIComponent(filePath)}`,
-        { headers: this.getHeaders() }
-      );
+      const url = filePath 
+        ? `${this.baseUrl}/session/${sessionId}/diff?path=${encodeURIComponent(filePath)}`
+        : `${this.baseUrl}/session/${sessionId}/diff`;
+      
+      const response = await fetch(url, {
+        headers: this.getHeaders(),
+      });
+      
       if (!response.ok) throw new Error('Failed to fetch git diff');
-      return response.text();
+      return response.json();
     } catch (error) {
       console.error('Error fetching git diff:', error);
-      return '';
+      return [];
     }
   }
 
   async sendMessage(
     sessionId: string,
     message: string,
-    attachments?: Array<{ type: string; content: string; name: string }>,
+    attachments?: Array<{ type: string; content: string; name: string; mimeType?: string }>,
     onChunk?: (text: string) => void
   ): Promise<string> {
     try {
-      const provider = this.getProvider();
-      const model = provider('opencode');
+      // Prepare message parts
+      const parts: MessagePart[] = [
+        {
+          type: 'text',
+          text: message,
+        }
+      ];
 
-      const messages: any[] = [{ role: 'user', content: message }];
-
-      // Add attachments if any
+      // Add attachments
       if (attachments && attachments.length > 0) {
-        const content: any[] = [{ type: 'text', text: message }];
-        
         for (const attachment of attachments) {
           if (attachment.type === 'image') {
-            content.push({
+            parts.push({
               type: 'image',
-              image: attachment.content,
+              image: attachment.content, // base64
             });
           } else {
-            // For file attachments, include as text
-            content.push({
-              type: 'text',
-              text: `\n\n--- File: ${attachment.name} ---\n${attachment.content}`,
+            // For file attachments
+            parts.push({
+              type: 'file',
+              data: attachment.content, // base64 or text content
+              mimeType: attachment.mimeType || 'text/plain',
             });
           }
         }
-        
-        messages[0] = { role: 'user', content };
       }
 
-      let fullResponse = '';
-
-      const result = await streamText({
-        model,
-        messages,
+      // Send message to OpenCode server
+      const response = await fetch(`${this.baseUrl}/session/${sessionId}/message`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ parts }),
       });
 
-      for await (const chunk of result.textStream) {
-        fullResponse += chunk;
-        if (onChunk) {
-          onChunk(chunk);
+      if (!response.ok) throw new Error('Failed to send message');
+
+      // Get the response - OpenCode returns the full message
+      const result: Message = await response.json();
+      
+      // Extract text from response parts
+      let fullResponse = '';
+      for (const part of result.parts) {
+        if (part.type === 'text' && part.text) {
+          fullResponse += part.text;
+          if (onChunk) {
+            onChunk(part.text);
+          }
         }
       }
 
@@ -141,26 +181,148 @@ export class OpenCodeService {
     }
   }
 
-  async executeCommand(sessionId: string, command: string): Promise<string> {
+  async streamMessage(
+    sessionId: string,
+    message: string,
+    attachments?: Array<{ type: string; content: string; name: string; mimeType?: string }>,
+    onChunk?: (text: string) => void
+  ): Promise<string> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/sessions/${sessionId}/terminal`, {
+      // Prepare message parts
+      const parts: MessagePart[] = [
+        {
+          type: 'text',
+          text: message,
+        }
+      ];
+
+      // Add attachments
+      if (attachments && attachments.length > 0) {
+        for (const attachment of attachments) {
+          if (attachment.type === 'image') {
+            parts.push({
+              type: 'image',
+              image: attachment.content,
+            });
+          } else {
+            parts.push({
+              type: 'file',
+              data: attachment.content,
+              mimeType: attachment.mimeType || 'text/plain',
+            });
+          }
+        }
+      }
+
+      // Use SSE endpoint for streaming
+      const eventSource = new EventSource(
+        `${this.baseUrl}/event`,
+        {
+          headers: this.getHeaders() as any,
+        }
+      );
+
+      let fullResponse = '';
+
+      return new Promise((resolve, reject) => {
+        // First, send the message asynchronously
+        fetch(`${this.baseUrl}/session/${sessionId}/prompt_async`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({ parts }),
+        }).catch(reject);
+
+        eventSource.addEventListener('message', (event: any) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            // Check if this event is for our session
+            if (data.sessionID === sessionId && data.type === 'text') {
+              const chunk = data.text || '';
+              fullResponse += chunk;
+              if (onChunk) {
+                onChunk(chunk);
+              }
+            }
+            
+            // Check if message is complete
+            if (data.done) {
+              eventSource.close();
+              resolve(fullResponse);
+            }
+          } catch (err) {
+            console.error('Error parsing event:', err);
+          }
+        });
+
+        eventSource.addEventListener('error', (error: any) => {
+          console.error('EventSource error:', error);
+          eventSource.close();
+          // Fallback to non-streaming if SSE fails
+          this.sendMessage(sessionId, message, attachments, onChunk)
+            .then(resolve)
+            .catch(reject);
+        });
+
+        // Timeout after 5 minutes
+        setTimeout(() => {
+          eventSource.close();
+          resolve(fullResponse || 'Request timed out');
+        }, 300000);
+      });
+    } catch (error) {
+      console.error('Error streaming message:', error);
+      throw error;
+    }
+  }
+
+  async getMessages(sessionId: string, limit?: number): Promise<Message[]> {
+    try {
+      const url = limit 
+        ? `${this.baseUrl}/session/${sessionId}/message?limit=${limit}`
+        : `${this.baseUrl}/session/${sessionId}/message`;
+      
+      const response = await fetch(url, {
+        headers: this.getHeaders(),
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      return [];
+    }
+  }
+
+  async abortSession(sessionId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/session/${sessionId}/abort`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify({ command }),
       });
-      if (!response.ok) throw new Error('Failed to execute command');
-      const data = await response.json();
-      return data.output || '';
+      return response.ok;
+    } catch (error) {
+      console.error('Error aborting session:', error);
+      return false;
+    }
+  }
+
+  async executeCommand(sessionId: string, command: string): Promise<string> {
+    try {
+      // OpenCode doesn't have a direct terminal endpoint in the API
+      // We'll send it as a message with a special format
+      const message = `Execute command: \`${command}\``;
+      return await this.sendMessage(sessionId, message);
     } catch (error) {
       console.error('Error executing command:', error);
       return `Error: ${error}`;
     }
   }
 
-  async getFileContent(sessionId: string, filePath: string): Promise<string> {
+  async getFileContent(filePath: string): Promise<string> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/api/sessions/${sessionId}/files?path=${encodeURIComponent(filePath)}`,
+        `${this.baseUrl}/file/content?path=${encodeURIComponent(filePath)}`,
         { headers: this.getHeaders() }
       );
       if (!response.ok) throw new Error('Failed to fetch file content');
@@ -171,13 +333,57 @@ export class OpenCodeService {
     }
   }
 
+  async findFiles(query: string): Promise<string[]> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/find/file?query=${encodeURIComponent(query)}`,
+        { headers: this.getHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to find files');
+      return response.json();
+    } catch (error) {
+      console.error('Error finding files:', error);
+      return [];
+    }
+  }
+
+  async searchText(pattern: string): Promise<any[]> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/find?pattern=${encodeURIComponent(pattern)}`,
+        { headers: this.getHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to search text');
+      return response.json();
+    } catch (error) {
+      console.error('Error searching text:', error);
+      return [];
+    }
+  }
+
+  async healthCheck(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/global/health`, {
+        headers: this.getHeaders(),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error checking health:', error);
+      return false;
+    }
+  }
+
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    
+    // Add HTTP Basic Auth if password is set
+    if (this.password) {
+      const credentials = btoa(`${this.username}:${this.password}`);
+      headers['Authorization'] = `Basic ${credentials}`;
     }
+    
     return headers;
   }
 }

@@ -51,8 +51,9 @@ export default function GitViewerTab({ session, server }: GitViewerTabProps) {
     setLoadingDiff(true);
     
     try {
-      const diff = await service.getGitDiff(session.id, file.path);
-      setDiffContent(diff || file.diff || 'No diff available');
+      const diffs = await service.getGitDiff(session.id, file.path);
+      const fileDiff = diffs.find(d => d.path === file.path);
+      setDiffContent(fileDiff?.diff || file.diff || 'No diff available');
     } catch (error) {
       console.error('Error loading diff:', error);
       setDiffContent('Error loading diff');
