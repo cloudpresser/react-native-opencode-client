@@ -1,3 +1,21 @@
+# [2.0.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.2.1...v2.0.0) (2026-02-16)
+
+
+* feat!: replace Node.js SDK with React Native-compatible REST API ([94ff884](https://github.com/cloudpresser/react-native-opencode-client/commit/94ff8843355dc5cc5e020db01b8fbf737bfdc8eb))
+
+
+### BREAKING CHANGES
+
+* Removed ai-sdk-provider-opencode-sdk dependency and replaced with direct REST API calls to OpenCode server. The app now communicates directly with OpenCode servers without requiring Node.js-specific modules.
+
+Changes:
+- Remove ai-sdk-provider-opencode-sdk and ai packages
+- Implement direct REST API calls using fetch
+- Add react-native-sse for EventSource streaming
+- Update all service methods for REST API compatibility
+- Fix GitViewerTab to handle proper API response types
+- Zero TypeScript errors, fully React Native compatible
+
 ## [1.2.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.2.0...v1.2.1) (2026-02-16)
 
 
