@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.0...v2.0.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* remove react-native-document-picker causing Gradle build failure ([4ab1a5f](https://github.com/cloudpresser/react-native-opencode-client/commit/4ab1a5f1af261dc27bb66a2a08f0ffa919db38b5))
+
 # [2.0.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.2.1...v2.0.0) (2026-02-16)
 
 
