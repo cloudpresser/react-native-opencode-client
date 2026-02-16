@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.0.1...v1.0.2) (2026-02-16)
+
+
+### Bug Fixes
+
+* add Android package name and iOS bundle identifier for EAS builds ([eaa3e60](https://github.com/cloudpresser/react-native-opencode-client/commit/eaa3e60e3de3d5097bd6f0fcbb6fc4c9b40ae73c))
+
 # 1.0.0 (2026-02-16)
 
 
