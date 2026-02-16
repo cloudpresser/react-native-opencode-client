@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.2.0...v1.2.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* configure EAS to use local credentials for Android builds ([bf0f180](https://github.com/cloudpresser/react-native-opencode-client/commit/bf0f18010d97bfa8bbbdbbc73b75457e272c4c42))
+
 # [1.2.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.1.0...v1.2.0) (2026-02-16)
 
 
