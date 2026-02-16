@@ -44,12 +44,37 @@ jobs:
 
       - name: Build Android APK (Preview)
         if: startsWith(github.ref, 'refs/tags/v')
+        id: build_tag
         run: |
           echo "Building preview APK for version ${{ steps.get_version.outputs.version }}"
-          eas build --platform android --profile preview --non-interactive --no-wait --message "Release v${{ steps.get_version.outputs.version }}"
+          BUILD_ID=$(eas build --platform android --profile preview --non-interactive --wait --json --message "Release v${{ steps.get_version.outputs.version }}" | jq -r '.[0].id')
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Build ID: $BUILD_ID"
       
       - name: Build Android APK (Manual)
         if: github.event_name == 'workflow_dispatch'
+        id: build_manual
         run: |
           echo "Building manual APK"
-          eas build --platform android --profile preview --non-interactive --no-wait --message "Manual build from ${{ github.sha }}"
+          BUILD_ID=$(eas build --platform android --profile preview --non-interactive --wait --json --message "Manual build from ${{ github.sha }}" | jq -r '.[0].id')
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Build ID: $BUILD_ID"
+
+      - name: Download APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          BUILD_ID=${{ steps.build_tag.outputs.build_id }}
+          echo "Downloading APK for build $BUILD_ID"
+          APK_URL=$(eas build:view $BUILD_ID --json | jq -r '.artifacts.buildUrl')
+          echo "APK URL: $APK_URL"
+          curl -L -o opencode-client-v${{ steps.get_version.outputs.version }}.apk "$APK_URL"
+          ls -lh *.apk
+
+      - name: Upload APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: opencode-client-v${{ steps.get_version.outputs.version }}.apk
+          tag_name: v${{ steps.get_version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
