@@ -1,3 +1,10 @@
+## [2.0.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.1...v2.0.2) (2026-02-16)
+
+
+### Bug Fixes
+
+* add contents write permission for GitHub release uploads ([155f604](https://github.com/cloudpresser/react-native-opencode-client/commit/155f604445ace281d407e572c6870ac20d3572fc))
+
 ## [2.0.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.0...v2.0.1) (2026-02-16)
 
 
