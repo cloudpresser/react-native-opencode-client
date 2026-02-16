@@ -1,0 +1,170 @@
+import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Server, Session, ChatMessage, GitFile, FileAnnotation } from '../types';
+
+interface AppState {
+  // Servers
+  servers: Server[];
+  selectedServer: Server | null;
+  addServer: (server: Server) => Promise<void>;
+  updateServer: (id: string, server: Partial<Server>) => Promise<void>;
+  deleteServer: (id: string) => Promise<void>;
+  selectServer: (server: Server | null) => void;
+  loadServers: () => Promise<void>;
+
+  // Sessions
+  sessions: Session[];
+  selectedSession: Session | null;
+  addSession: (session: Session) => Promise<void>;
+  updateSession: (id: string, session: Partial<Session>) => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
+  selectSession: (session: Session | null) => void;
+  loadSessions: (serverId: string) => Promise<void>;
+
+  // Chat
+  messages: Record<string, ChatMessage[]>;
+  addMessage: (sessionId: string, message: ChatMessage) => void;
+  loadMessages: (sessionId: string) => Promise<void>;
+  clearMessages: (sessionId: string) => void;
+
+  // Git Files
+  gitFiles: Record<string, GitFile[]>;
+  setGitFiles: (sessionId: string, files: GitFile[]) => void;
+
+  // File Annotations
+  fileAnnotations: Record<string, FileAnnotation[]>;
+  addFileAnnotation: (sessionId: string, annotation: FileAnnotation) => void;
+  removeFileAnnotation: (sessionId: string, filePath: string) => void;
+  clearFileAnnotations: (sessionId: string) => void;
+}
+
+const SERVERS_KEY = '@opencode_servers';
+const SESSIONS_KEY = '@opencode_sessions';
+const MESSAGES_KEY = '@opencode_messages';
+
+export const useStore = create<AppState>((set, get) => ({
+  // Servers
+  servers: [],
+  selectedServer: null,
+  
+  addServer: async (server: Server) => {
+    const servers = [...get().servers, server];
+    set({ servers });
+    await AsyncStorage.setItem(SERVERS_KEY, JSON.stringify(servers));
+  },
+  
+  updateServer: async (id: string, updates: Partial<Server>) => {
+    const servers = get().servers.map(s => s.id === id ? { ...s, ...updates } : s);
+    set({ servers });
+    await AsyncStorage.setItem(SERVERS_KEY, JSON.stringify(servers));
+  },
+  
+  deleteServer: async (id: string) => {
+    const servers = get().servers.filter(s => s.id !== id);
+    set({ servers });
+    await AsyncStorage.setItem(SERVERS_KEY, JSON.stringify(servers));
+  },
+  
+  selectServer: (server: Server | null) => set({ selectedServer: server }),
+  
+  loadServers: async () => {
+    const data = await AsyncStorage.getItem(SERVERS_KEY);
+    if (data) {
+      set({ servers: JSON.parse(data) });
+    }
+  },
+
+  // Sessions
+  sessions: [],
+  selectedSession: null,
+  
+  addSession: async (session: Session) => {
+    const sessions = [...get().sessions, session];
+    set({ sessions });
+    await AsyncStorage.setItem(`${SESSIONS_KEY}_${session.serverId}`, JSON.stringify(sessions));
+  },
+  
+  updateSession: async (id: string, updates: Partial<Session>) => {
+    const sessions = get().sessions.map(s => s.id === id ? { ...s, ...updates } : s);
+    set({ sessions });
+    const serverId = sessions.find(s => s.id === id)?.serverId;
+    if (serverId) {
+      await AsyncStorage.setItem(`${SESSIONS_KEY}_${serverId}`, JSON.stringify(sessions));
+    }
+  },
+  
+  deleteSession: async (id: string) => {
+    const sessions = get().sessions.filter(s => s.id !== id);
+    set({ sessions });
+    const serverId = get().selectedServer?.id;
+    if (serverId) {
+      await AsyncStorage.setItem(`${SESSIONS_KEY}_${serverId}`, JSON.stringify(sessions));
+    }
+  },
+  
+  selectSession: (session: Session | null) => set({ selectedSession: session }),
+  
+  loadSessions: async (serverId: string) => {
+    const data = await AsyncStorage.getItem(`${SESSIONS_KEY}_${serverId}`);
+    if (data) {
+      set({ sessions: JSON.parse(data) });
+    } else {
+      set({ sessions: [] });
+    }
+  },
+
+  // Chat
+  messages: {},
+  
+  addMessage: (sessionId: string, message: ChatMessage) => {
+    const messages = get().messages;
+    const sessionMessages = messages[sessionId] || [];
+    const updated = { ...messages, [sessionId]: [...sessionMessages, message] };
+    set({ messages: updated });
+    AsyncStorage.setItem(`${MESSAGES_KEY}_${sessionId}`, JSON.stringify(updated[sessionId]));
+  },
+  
+  loadMessages: async (sessionId: string) => {
+    const data = await AsyncStorage.getItem(`${MESSAGES_KEY}_${sessionId}`);
+    if (data) {
+      const messages = get().messages;
+      set({ messages: { ...messages, [sessionId]: JSON.parse(data) } });
+    }
+  },
+  
+  clearMessages: (sessionId: string) => {
+    const messages = { ...get().messages };
+    delete messages[sessionId];
+    set({ messages });
+    AsyncStorage.removeItem(`${MESSAGES_KEY}_${sessionId}`);
+  },
+
+  // Git Files
+  gitFiles: {},
+  
+  setGitFiles: (sessionId: string, files: GitFile[]) => {
+    const gitFiles = { ...get().gitFiles, [sessionId]: files };
+    set({ gitFiles });
+  },
+
+  // File Annotations
+  fileAnnotations: {},
+  
+  addFileAnnotation: (sessionId: string, annotation: FileAnnotation) => {
+    const annotations = get().fileAnnotations[sessionId] || [];
+    const filtered = annotations.filter(a => a.filePath !== annotation.filePath);
+    const updated = { ...get().fileAnnotations, [sessionId]: [...filtered, annotation] };
+    set({ fileAnnotations: updated });
+  },
+  
+  removeFileAnnotation: (sessionId: string, filePath: string) => {
+    const annotations = (get().fileAnnotations[sessionId] || []).filter(a => a.filePath !== filePath);
+    set({ fileAnnotations: { ...get().fileAnnotations, [sessionId]: annotations } });
+  },
+  
+  clearFileAnnotations: (sessionId: string) => {
+    const fileAnnotations = { ...get().fileAnnotations };
+    delete fileAnnotations[sessionId];
+    set({ fileAnnotations });
+  },
+}));
