@@ -45,3 +45,4 @@ yarn-error.*
 *.keystore
 *.b64
 credentials.json
+.osgrep
