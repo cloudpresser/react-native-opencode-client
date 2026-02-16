@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.1.0...v1.2.0) (2026-02-16)
+
+
+### Features
+
+* configure GitHub Actions to use Android keystore for signed APKs ([a301162](https://github.com/cloudpresser/react-native-opencode-client/commit/a3011621cc21b2f07341b433a03c32a9ea816fd9))
+
 # [1.1.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v1.0.2...v1.1.0) (2026-02-16)
 
 
