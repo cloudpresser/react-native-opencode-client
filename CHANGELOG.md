@@ -1,3 +1,10 @@
+## [2.0.4](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.3...v2.0.4) (2026-02-17)
+
+
+### Bug Fixes
+
+* improve error logging for session creation and Base64 encoding ([75cac9d](https://github.com/cloudpresser/react-native-opencode-client/commit/75cac9d9bf9b45538e5244fcc29f28460363864c))
+
 ## [2.0.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.2...v2.0.3) (2026-02-17)
 
 
