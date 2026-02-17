@@ -100,7 +100,11 @@ export default function ServersScreen() {
   };
 
   const renderServer = ({ item }: { item: Server }) => (
-    <TouchableOpacity style={styles.serverCard} onPress={() => handleSelectServer(item)}>
+    <TouchableOpacity 
+      style={styles.serverCard} 
+      onPress={() => handleSelectServer(item)}
+      testID={`server-item-${item.id}`}
+    >
       <View style={styles.serverInfo}>
         <Text style={styles.serverName}>{item.name}</Text>
         <Text style={styles.serverDetails}>
@@ -108,12 +112,17 @@ export default function ServersScreen() {
         </Text>
       </View>
       <View style={styles.serverActions}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => handleEdit(item)}>
+        <TouchableOpacity 
+          style={styles.actionButton} 
+          onPress={() => handleEdit(item)}
+          testID={`edit-server-${item.id}`}
+        >
           <Text style={styles.actionButtonText}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.deleteButton]} 
           onPress={() => handleDelete(item)}
+          testID={`delete-server-${item.id}`}
         >
           <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
         </TouchableOpacity>
@@ -122,10 +131,14 @@ export default function ServersScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="servers-screen">
       <View style={styles.header}>
         <Text style={styles.title}>OpenCode Servers</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={() => setModalVisible(true)} 
+          testID="add-server-button"
+        >
           <Text style={styles.addButtonText}>+ Add Server</Text>
         </TouchableOpacity>
       </View>
@@ -135,15 +148,21 @@ export default function ServersScreen() {
         renderItem={renderServer}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        testID="servers-list"
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
+          <View style={styles.emptyContainer} testID="empty-servers">
             <Text style={styles.emptyText}>No servers configured</Text>
             <Text style={styles.emptySubtext}>Tap "Add Server" to get started</Text>
           </View>
         }
       />
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal 
+        visible={modalVisible} 
+        animationType="slide" 
+        transparent
+        testID="server-modal"
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
@@ -155,6 +174,7 @@ export default function ServersScreen() {
               placeholder="Server Name"
               value={formData.name}
               onChangeText={(text) => setFormData({ ...formData, name: text })}
+              testID="server-name-input"
             />
 
             <TextInput
@@ -163,6 +183,8 @@ export default function ServersScreen() {
               value={formData.host}
               onChangeText={(text) => setFormData({ ...formData, host: text })}
               autoCapitalize="none"
+              autoCorrect={false}
+              testID="server-host-input"
             />
 
             <TextInput
@@ -171,6 +193,7 @@ export default function ServersScreen() {
               value={formData.port}
               onChangeText={(text) => setFormData({ ...formData, port: text })}
               keyboardType="number-pad"
+              testID="server-port-input"
             />
 
             <View style={styles.switchContainer}>
@@ -178,6 +201,7 @@ export default function ServersScreen() {
               <Switch
                 value={formData.useSSL}
                 onValueChange={(value) => setFormData({ ...formData, useSSL: value })}
+                testID="server-ssl-switch"
               />
             </View>
 
@@ -186,17 +210,24 @@ export default function ServersScreen() {
               placeholder="API Key (optional)"
               value={formData.apiKey}
               onChangeText={(text) => setFormData({ ...formData, apiKey: text })}
-              autoCapitalize="none"
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              testID="server-apikey-input"
             />
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalButton} onPress={resetForm}>
+              <TouchableOpacity 
+                style={styles.modalButton} 
+                onPress={resetForm}
+                testID="cancel-server-button"
+              >
                 <Text style={styles.modalButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.saveButton]}
                 onPress={handleSave}
+                testID="save-server-button"
               >
                 <Text style={[styles.modalButtonText, styles.saveButtonText]}>Save</Text>
               </TouchableOpacity>

@@ -1,0 +1,25 @@
+appId: com.cloudpresser.opencodeclient
+env:
+  SERVER_NAME: "E2E Test Server"
+  SERVER_HOST: "192.168.1.100"
+  SERVER_PORT: "4096"
+  SESSION_TITLE: "E2E Test Session"
+---
+- launchApp
+- runFlow:
+    file: add-server.yaml
+- runFlow:
+    file: create-session.yaml
+- runFlow:
+    file: send-chat-message.yaml
+- runFlow:
+    file: git-viewer.yaml
+- runFlow:
+    file: terminal.yaml
+- runFlow:
+    file: file-annotation.yaml
+- runFlow:
+    file: delete-session.yaml
+- runFlow:
+    file: delete-server.yaml
+- assertNotVisible: "${SERVER_NAME}"

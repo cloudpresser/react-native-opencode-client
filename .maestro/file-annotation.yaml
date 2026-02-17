@@ -1,0 +1,14 @@
+appId: com.cloudpresser.opencodeclient
+env:
+  SERVER_NAME: "Test Server"
+  SESSION_TITLE: "Test Session"
+---
+- launchApp
+- runFlow:
+    file: create-session.yaml
+- tapOn: "${SESSION_TITLE}"
+- tapOn: "Annotate"
+- assertVisible: "File Annotations"
+- tapOn:
+    id: "add-file-btn"
+- assertVisible: "Select files to annotate"

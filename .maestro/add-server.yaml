@@ -1,0 +1,27 @@
+appId: com.cloudpresser.opencodeclient
+---
+- launchApp
+- assertVisible: "OpenCode Servers"
+- tapOn:
+    id: "add-server-btn"
+- assertVisible: "Add Server"
+- tapOn:
+    id: "server-name-input"
+- inputText: "Test Server"
+- tapOn:
+    id: "server-host-input"
+- inputText: "192.168.1.100"
+- tapOn:
+    id: "server-port-input"
+- inputText: "4096"
+- tapOn:
+    id: "server-username-input"
+- inputText: "opencode"
+- tapOn:
+    id: "server-password-input"
+- inputText: "testpassword"
+- hideKeyboard
+- tapOn:
+    id: "save-server-btn"
+- assertVisible: "Test Server"
+- assertVisible: "192.168.1.100:4096"

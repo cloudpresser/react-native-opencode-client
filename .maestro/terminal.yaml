@@ -1,0 +1,18 @@
+appId: com.cloudpresser.opencodeclient
+env:
+  SERVER_NAME: "Test Server"
+  SESSION_TITLE: "Test Session"
+---
+- launchApp
+- runFlow:
+    file: create-session.yaml
+- tapOn: "${SESSION_TITLE}"
+- tapOn: "Terminal"
+- assertVisible: "Terminal"
+- tapOn:
+    id: "terminal-input"
+- inputText: "ls -la"
+- hideKeyboard
+- tapOn:
+    id: "terminal-send-btn"
+- assertVisible: "ls -la"

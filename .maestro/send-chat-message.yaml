@@ -1,0 +1,17 @@
+appId: com.cloudpresser.opencodeclient
+env:
+  SERVER_NAME: "Test Server"
+  SESSION_TITLE: "Test Session"
+---
+- launchApp
+- runFlow:
+    file: create-session.yaml
+- tapOn: "${SESSION_TITLE}"
+- assertVisible: "Chat"
+- tapOn:
+    id: "chat-input"
+- inputText: "Hello, this is a test message!"
+- hideKeyboard
+- tapOn:
+    id: "send-message-btn"
+- assertVisible: "Hello, this is a test message!"

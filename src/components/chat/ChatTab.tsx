@@ -38,7 +38,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   }, [session.id]);
 
   useEffect(() => {
-    // Scroll to bottom when new messages arrive
     if (sessionMessages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -132,7 +131,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     setLoading(true);
 
     try {
-      // Prepare attachments for sending
       const preparedAttachments = await Promise.all(
         currentAttachments.map(async (att) => {
           let content = '';
@@ -192,6 +190,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         styles.messageContainer,
         item.role === 'user' ? styles.userMessage : styles.assistantMessage,
       ]}
+      testID={`message-${item.role}-${item.id}`}
     >
       <View style={styles.messageHeader}>
         <Text style={styles.messageRole}>{item.role === 'user' ? 'You' : 'Assistant'}</Text>
@@ -236,22 +235,23 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="chat-tab">
       <FlatList
         ref={flatListRef}
         data={sessionMessages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesContainer}
+        testID="messages-list"
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
+          <View style={styles.emptyContainer} testID="empty-messages">
             <Text style={styles.emptyText}>No messages yet</Text>
             <Text style={styles.emptySubtext}>Start a conversation with OpenCode</Text>
           </View>
         }
         ListFooterComponent={
           streamingText ? (
-            <View style={[styles.messageContainer, styles.assistantMessage]}>
+            <View style={[styles.messageContainer, styles.assistantMessage]} testID="streaming-message">
               <Text style={styles.messageRole}>Assistant</Text>
               <Text style={styles.messageContent}>{streamingText}</Text>
               <ActivityIndicator style={styles.streamingIndicator} />
@@ -267,15 +267,24 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           renderItem={renderAttachment}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.attachmentsBar}
+          testID="attachments-list"
         />
       )}
 
       <View style={styles.inputContainer}>
-        <TouchableOpacity style={styles.attachButton} onPress={handlePickFile}>
+        <TouchableOpacity 
+          style={styles.attachButton} 
+          onPress={handlePickFile}
+          testID="attach-file-button"
+        >
           <Text style={styles.attachButtonText}>📎</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.attachButton} onPress={handlePickImage}>
+        <TouchableOpacity 
+          style={styles.attachButton} 
+          onPress={handlePickImage}
+          testID="attach-image-button"
+        >
           <Text style={styles.attachButtonText}>🖼️</Text>
         </TouchableOpacity>
 
@@ -287,12 +296,14 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           multiline
           maxLength={10000}
           editable={!loading}
+          testID="message-input"
         />
 
         <TouchableOpacity
           style={[styles.sendButton, loading && styles.sendButtonDisabled]}
           onPress={handleSend}
           disabled={loading}
+          testID="send-message-button"
         >
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />

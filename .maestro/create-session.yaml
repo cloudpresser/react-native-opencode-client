@@ -1,0 +1,19 @@
+appId: com.cloudpresser.opencodeclient
+env:
+  SERVER_NAME: "Test Server"
+---
+- launchApp
+- runFlow:
+    file: add-server.yaml
+- tapOn: "${SERVER_NAME}"
+- assertVisible: "Sessions"
+- tapOn:
+    id: "create-session-btn"
+- assertVisible: "New Session"
+- tapOn:
+    id: "session-title-input"
+- inputText: "Test Session"
+- hideKeyboard
+- tapOn:
+    id: "save-session-btn"
+- assertVisible: "Test Session"

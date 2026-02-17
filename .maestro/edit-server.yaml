@@ -1,0 +1,17 @@
+appId: com.cloudpresser.opencodeclient
+---
+- launchApp
+- runFlow:
+    file: add-server.yaml
+- tapOn:
+    id: "edit-server-btn-Test Server"
+- assertVisible: "Edit Server"
+- tapOn:
+    id: "server-name-input"
+- eraseText
+- inputText: "Updated Server"
+- hideKeyboard
+- tapOn:
+    id: "save-server-btn"
+- assertVisible: "Updated Server"
+- assertNotVisible: "Test Server"

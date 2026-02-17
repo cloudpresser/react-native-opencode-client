@@ -1,0 +1,85 @@
+name: Maestro E2E Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_flow:
+        description: 'Test flow to run (e.g., full-e2e-suite.yaml)'
+        required: false
+        default: 'full-e2e-suite.yaml'
+      apk_url:
+        description: 'URL to APK file (optional, will use latest release if not provided)'
+        required: false
+
+jobs:
+  maestro-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+      
+      - name: Install idb-companion (for iOS support in future)
+        if: runner.os == 'macOS'
+        run: |
+          brew tap facebook/fb
+          brew install facebook/fb/idb-companion
+      
+      - name: Download APK from release
+        if: inputs.apk_url == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --pattern "*.apk" --dir ./apk
+          APK_FILE=$(ls ./apk/*.apk | head -1)
+          echo "APK_PATH=$APK_FILE" >> $GITHUB_ENV
+      
+      - name: Download APK from URL
+        if: inputs.apk_url != ''
+        run: |
+          mkdir -p ./apk
+          curl -L "${{ inputs.apk_url }}" -o ./apk/app.apk
+          echo "APK_PATH=./apk/app.apk" >> $GITHUB_ENV
+      
+      - name: Setup Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          disable-animations: true
+          script: |
+            # Wait for emulator to boot
+            adb wait-for-device
+            adb devices
+            
+            # Install APK
+            adb install -r ${{ env.APK_PATH }}
+            
+            # Run Maestro tests
+            maestro test .maestro/${{ inputs.test_flow }}
+      
+      - name: Upload Maestro logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-logs
+          path: |
+            ~/.maestro/logs/
+            /tmp/maestro/**

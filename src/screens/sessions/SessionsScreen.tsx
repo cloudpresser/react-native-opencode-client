@@ -40,10 +40,8 @@ export default function SessionsScreen() {
     try {
       const remoteSessions = await service.getSessions();
       
-      // Merge with local sessions
       await loadSessions(server.id);
       
-      // Add any remote sessions that aren't in local storage
       for (const remoteSession of remoteSessions) {
         const exists = sessions.find(s => s.id === remoteSession.id);
         if (!exists) {
@@ -120,7 +118,11 @@ export default function SessionsScreen() {
   };
 
   const renderSession = ({ item }: { item: Session }) => (
-    <TouchableOpacity style={styles.sessionCard} onPress={() => handleSelectSession(item)}>
+    <TouchableOpacity 
+      style={styles.sessionCard} 
+      onPress={() => handleSelectSession(item)}
+      testID={`session-item-${item.id}`}
+    >
       <View style={styles.sessionInfo}>
         <Text style={styles.sessionTitle}>{item.title}</Text>
         <Text style={styles.sessionDate}>Created: {formatDate(item.createdAt)}</Text>
@@ -131,6 +133,7 @@ export default function SessionsScreen() {
       <TouchableOpacity
         style={styles.deleteButton}
         onPress={() => handleDeleteSession(item)}
+        testID={`delete-session-${item.id}`}
       >
         <Text style={styles.deleteButtonText}>Delete</Text>
       </TouchableOpacity>
@@ -138,19 +141,26 @@ export default function SessionsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="sessions-screen">
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()}
+          testID="back-button"
+        >
           <Text style={styles.backButton}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{server.name}</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={() => setModalVisible(true)}
+          testID="add-session-button"
+        >
           <Text style={styles.addButtonText}>+ New</Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
+        <View style={styles.loadingContainer} testID="loading-indicator">
           <ActivityIndicator size="large" color="#007AFF" />
         </View>
       ) : (
@@ -159,8 +169,9 @@ export default function SessionsScreen() {
           renderItem={renderSession}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          testID="sessions-list"
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
+            <View style={styles.emptyContainer} testID="empty-sessions">
               <Text style={styles.emptyText}>No sessions</Text>
               <Text style={styles.emptySubtext}>Create a new session to get started</Text>
             </View>
@@ -168,7 +179,12 @@ export default function SessionsScreen() {
         />
       )}
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal 
+        visible={modalVisible} 
+        animationType="slide" 
+        transparent
+        testID="session-modal"
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>New Session</Text>
@@ -179,6 +195,7 @@ export default function SessionsScreen() {
               value={newSessionTitle}
               onChangeText={setNewSessionTitle}
               autoFocus
+              testID="session-title-input"
             />
 
             <View style={styles.modalButtons}>
@@ -188,6 +205,7 @@ export default function SessionsScreen() {
                   setNewSessionTitle('');
                   setModalVisible(false);
                 }}
+                testID="cancel-session-button"
               >
                 <Text style={styles.modalButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -195,6 +213,7 @@ export default function SessionsScreen() {
                 style={[styles.modalButton, styles.createButton]}
                 onPress={handleCreateSession}
                 disabled={loading}
+                testID="create-session-button"
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />

@@ -1,0 +1,10 @@
+appId: com.cloudpresser.opencodeclient
+---
+- launchApp
+- runFlow:
+    file: add-server.yaml
+- tapOn:
+    id: "delete-server-btn-Test Server"
+- tapOn:
+    text: "Delete"
+- assertNotVisible: "Test Server"

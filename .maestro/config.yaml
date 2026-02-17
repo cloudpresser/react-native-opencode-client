@@ -1,0 +1,11 @@
+appId: com.cloudpresser.opencodeclient
+
+# Default timeouts
+defaultTimeout: 30000
+
+# Keyboard settings
+keyboard:
+  hideOnEnter: true
+
+# Locale for testing
+locale: en_US
