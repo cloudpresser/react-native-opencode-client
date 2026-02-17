@@ -1,3 +1,10 @@
+## [2.0.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.2...v2.0.3) (2026-02-17)
+
+
+### Bug Fixes
+
+* use base-64 package for React Native compatibility ([7f1321f](https://github.com/cloudpresser/react-native-opencode-client/commit/7f1321f05fcbb817c734f649943c26ad3a5bc50b))
+
 ## [2.0.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.1...v2.0.2) (2026-02-16)
 
 
