@@ -58,7 +58,11 @@ export class OpenCodeService {
         headers: this.getHeaders(),
         body: JSON.stringify({ title }),
       });
-      if (!response.ok) throw new Error('Failed to create session');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Failed to create session: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Failed to create session: ${response.status}`);
+      }
       return response.json();
     } catch (error) {
       console.error('Error creating session:', error);
@@ -375,14 +379,17 @@ export class OpenCodeService {
   }
 
   private getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
+const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
     
-    // Add HTTP Basic Auth if password is set
-    if (this.password) {
-      const credentials = base64.encode(`${this.username}:${this.password}`);
-      headers['Authorization'] = `Basic ${credentials}`;
+    if (this.username && this.password) {
+      try {
+        const credentials = base64.encode(`${this.username}:${this.password}`);
+        headers['Authorization'] = `Basic ${credentials}`;
+      } catch (e) {
+        console.error('Base64 encoding failed:', e);
+      }
     }
     
     return headers;
