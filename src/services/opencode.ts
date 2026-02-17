@@ -1,5 +1,6 @@
 import { Server, Session, GitFile } from '../types';
 import EventSource from 'react-native-sse';
+import base64 from 'base-64';
 
 interface MessagePart {
   type: 'text' | 'image' | 'file';
@@ -380,7 +381,7 @@ export class OpenCodeService {
     
     // Add HTTP Basic Auth if password is set
     if (this.password) {
-      const credentials = btoa(`${this.username}:${this.password}`);
+      const credentials = base64.encode(`${this.username}:${this.password}`);
       headers['Authorization'] = `Basic ${credentials}`;
     }
     
