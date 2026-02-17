@@ -31,6 +31,26 @@ jobs:
         run: npm ci
 
       - name: Run semantic-release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+        run: |
+          git fetch --tags
+          BEFORE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          npx semantic-release
+          git fetch --tags
+          AFTER_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          if [ "$BEFORE_TAG" != "$AFTER_TAG" ]; then
+            echo "new_tag=$AFTER_TAG" >> $GITHUB_OUTPUT
+            echo "New release created: $AFTER_TAG"
+          else
+            echo "No new release created"
+          fi
+
+      - name: Trigger EAS Build
+        if: steps.semantic.outputs.new_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run eas-build.yml --ref ${{ steps.semantic.outputs.new_tag }}
+          echo "Triggered EAS Build for ${{ steps.semantic.outputs.new_tag }}"
