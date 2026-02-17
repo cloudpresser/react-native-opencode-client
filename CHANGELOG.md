@@ -1,3 +1,11 @@
+## [2.0.5](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.4...v2.0.5) (2026-02-17)
+
+
+### Bug Fixes
+
+* configure git auth for tag fetch in release workflow ([8501e97](https://github.com/cloudpresser/react-native-opencode-client/commit/8501e97b9495f1d5b69313c65d91b809bad99b48))
+* trigger EAS build from release workflow after semantic-release creates tag ([760a207](https://github.com/cloudpresser/react-native-opencode-client/commit/760a20725cd7b5411f83a2a37605bdc6e13ba7d9))
+
 ## [2.0.4](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.3...v2.0.4) (2026-02-17)
 
 
