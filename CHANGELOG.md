@@ -1,3 +1,10 @@
+## [2.0.6](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.5...v2.0.6) (2026-02-17)
+
+
+### Bug Fixes
+
+* use PAT for triggering EAS build workflow ([6641bed](https://github.com/cloudpresser/react-native-opencode-client/commit/6641bed502ea1c0c44216fdca9421b5fa5aa9165))
+
 ## [2.0.5](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.4...v2.0.5) (2026-02-17)
 
 
