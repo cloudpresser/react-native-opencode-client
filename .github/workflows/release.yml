@@ -9,6 +9,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  actions: write
 
 jobs:
   release:
@@ -51,7 +52,7 @@ jobs:
       - name: Trigger EAS Build
         if: steps.semantic.outputs.new_tag != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
           gh workflow run eas-build.yml --ref ${{ steps.semantic.outputs.new_tag }}
           echo "Triggered EAS Build for ${{ steps.semantic.outputs.new_tag }}"
