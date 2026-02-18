@@ -1,0 +1,78 @@
+appId: com.cloudpresser.opencodeclient
+tags:
+  - ci
+  - smoke
+---
+# CI Smoke Test - UI-only flows (no backend required)
+# Tests core CRUD operations on the Servers screen
+
+# --- App Launch ---
+- launchApp
+
+- assertVisible:
+    text: "OpenCode Servers"
+    timeout: 10000
+
+# --- Add a Server ---
+- tapOn:
+    id: "add-server-button"
+
+- assertVisible: "Add Server"
+
+- tapOn:
+    id: "server-name-input"
+- inputText: "CI Test Server"
+
+- tapOn:
+    id: "server-host-input"
+- inputText: "10.0.2.2"
+
+- tapOn:
+    id: "server-port-input"
+- inputText: "4096"
+
+- tapOn:
+    id: "server-apikey-input"
+- inputText: "ci-test-key"
+
+- tapOn:
+    id: "save-server-button"
+
+- assertVisible:
+    text: "CI Test Server"
+    timeout: 5000
+
+# --- Edit the Server ---
+- tapOn:
+    id: "edit-server-button"
+
+- assertVisible: "Edit Server"
+
+- tapOn:
+    id: "server-name-input"
+- eraseText: 14
+- inputText: "CI Updated Server"
+
+- tapOn:
+    id: "save-server-button"
+
+- assertVisible:
+    text: "CI Updated Server"
+    timeout: 5000
+
+- assertNotVisible: "CI Test Server"
+
+# --- Delete the Server ---
+- tapOn:
+    id: "delete-server-button"
+
+- assertVisible: "Delete Server"
+
+- tapOn:
+    text: "Delete"
+
+- assertNotVisible:
+    text: "CI Updated Server"
+    timeout: 5000
+
+- assertVisible: "OpenCode Servers"
