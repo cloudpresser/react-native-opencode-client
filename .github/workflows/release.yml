@@ -15,6 +15,8 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.semantic.outputs.new_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,10 +51,123 @@ jobs:
             echo "No new release created"
           fi
 
-      - name: Trigger EAS Build
-        if: steps.semantic.outputs.new_tag != ''
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+  eas-build:
+    name: EAS Build & Release APK
+    needs: release
+    if: needs.release.outputs.new_tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.new_tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Extract version from tag
+        id: get_version
         run: |
-          gh workflow run eas-build.yml --ref ${{ steps.semantic.outputs.new_tag }}
-          echo "Triggered EAS Build for ${{ steps.semantic.outputs.new_tag }}"
+          VERSION="${{ needs.release.outputs.new_tag }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run EAS Workflow (build)
+        id: eas_workflow
+        run: |
+          echo "Triggering EAS Workflow: build.yaml"
+
+          set +eo pipefail
+          eas workflow:run .eas/workflows/build.yaml \
+            --wait --json --non-interactive \
+            1>eas_output.txt 2>eas_stderr.txt
+          EXIT_CODE=$?
+          set -eo pipefail
+
+          echo "--- EAS Workflow stderr ---"
+          cat eas_stderr.txt || true
+          echo "--- EAS Workflow stdout ---"
+          cat eas_output.txt || true
+          echo "--- Exit code: $EXIT_CODE ---"
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "::error::EAS Workflow failed (exit code $EXIT_CODE)"
+            exit 1
+          fi
+
+          OUTPUT_JSON=$(sed -n '/^{/,$p' eas_output.txt)
+
+          if [ -z "$OUTPUT_JSON" ]; then
+            echo "::warning::No JSON found in EAS workflow output"
+            echo "build_id=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          BUILD_ID=$(echo "$OUTPUT_JSON" | jq -r '.jobs[0].outputs.build_id // .jobs[0].turtleBuild.id // .jobs[0].id // empty') || true
+          APK_DIRECT_URL=$(echo "$OUTPUT_JSON" | jq -r '.jobs[0].turtleBuild.artifacts.buildUrl // empty') || true
+
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Extracted build_id: $BUILD_ID"
+
+          if [ -n "$APK_DIRECT_URL" ] && [ "$APK_DIRECT_URL" != "null" ]; then
+            echo "apk_url=$APK_DIRECT_URL" >> $GITHUB_OUTPUT
+            echo "APK URL from workflow output: $APK_DIRECT_URL"
+          fi
+
+          if [ -z "$BUILD_ID" ]; then
+            echo "::warning::Could not extract build_id from workflow output — APK download will be skipped"
+          fi
+
+      - name: Download APK
+        if: steps.eas_workflow.outputs.build_id != ''
+        run: |
+          BUILD_ID=${{ steps.eas_workflow.outputs.build_id }}
+          echo "Downloading APK for build $BUILD_ID"
+
+          APK_URL="${{ steps.eas_workflow.outputs.apk_url }}"
+          if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
+            echo "Using APK URL from workflow output: $APK_URL"
+          else
+            echo "No direct URL, polling eas build:view..."
+            for i in $(seq 1 30); do
+              APK_URL=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.artifacts.buildUrl // empty')
+              if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
+                echo "APK URL found: $APK_URL"
+                break
+              fi
+              echo "Attempt $i/30: Artifact not ready yet, waiting 10s..."
+              sleep 10
+            done
+          fi
+
+          if [ -z "$APK_URL" ] || [ "$APK_URL" = "null" ]; then
+            echo "::error::Failed to get APK URL after 5 minutes"
+            eas build:view "$BUILD_ID" --json 2>&1 | jq '.' || true
+            exit 1
+          fi
+
+          curl -L -o "opencode-client-v${{ steps.get_version.outputs.version }}.apk" "$APK_URL"
+          ls -lh *.apk
+
+      - name: Upload APK to GitHub Release
+        if: steps.eas_workflow.outputs.build_id != ''
+        uses: softprops/action-gh-release@v1
+        with:
+          files: opencode-client-v${{ steps.get_version.outputs.version }}.apk
+          tag_name: v${{ steps.get_version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

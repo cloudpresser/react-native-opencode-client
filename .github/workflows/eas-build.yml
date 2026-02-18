@@ -1,9 +1,6 @@
-name: EAS Build
+name: EAS Build (Manual)
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
