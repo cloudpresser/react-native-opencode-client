@@ -1,3 +1,10 @@
+## [2.5.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.5.0...v2.5.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* migrate all hardcoded colors to base16 theme tokens ([4451ed5](https://github.com/cloudpresser/react-native-opencode-client/commit/4451ed5a04df62108542634fc63e20a112aae7f0)), closes [#22c55e](https://github.com/cloudpresser/react-native-opencode-client/issues/22c55e) [282c34/#abb2bf](https://github.com/cloudpresser/react-native-opencode-client/issues/abb2bf) [#fff](https://github.com/cloudpresser/react-native-opencode-client/issues/fff) [#fff](https://github.com/cloudpresser/react-native-opencode-client/issues/fff) [#ef4444](https://github.com/cloudpresser/react-native-opencode-client/issues/ef4444)
+
 # [2.5.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.4.1...v2.5.0) (2026-02-18)
 
 
