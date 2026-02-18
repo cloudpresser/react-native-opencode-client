@@ -15,12 +15,15 @@ import { useStore } from '../../store';
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 import { Server } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
+import { ServerStatusBadge } from '../../components/ServerStatusBadge';
+import { useServerStatusContext } from '../../context/ServerStatusContext';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Servers'>;
 
 export default function ServersScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { servers, deleteServer, selectServer, loadServers } = useStore();
+  const { getStatus } = useServerStatusContext();
 
   useEffect(() => {
     loadServers();
@@ -46,37 +49,45 @@ export default function ServersScreen() {
     navigation.navigate('Sessions', { server });
   };
 
-  const renderServer = ({ item }: { item: Server }): React.ReactElement => (
-    <TouchableOpacity
-      className="bg-surface rounded-xl p-4 mb-3 shadow-sm"
-      onPress={() => handleSelectServer(item)}
-      testID={`server-item-${item.id}`}
-      accessible={false}
-    >
-      <View className="mb-3">
-        <Text className="text-lg font-semibold text-text mb-1">{item.name}</Text>
-        <Text className="text-sm text-text-muted">
-          {item.useSSL ? 'https' : 'http'}://{item.host}:{item.port}
-        </Text>
-      </View>
-      <View className="flex-row gap-2">
-        <TouchableOpacity
-          className="px-4 py-2 rounded-md bg-primary"
-          onPress={() => handleEdit(item)}
-          testID={`edit-server-btn-${item.name}`}
-        >
-          <Text className="text-white font-semibold">Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          className="px-4 py-2 rounded-md bg-danger"
-          onPress={() => handleDelete(item)}
-          testID={`delete-server-btn-${item.name}`}
-        >
-          <Text className="text-white font-semibold">Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderServer = ({ item }: { item: Server }): React.ReactElement => {
+    const status = getStatus(item.id);
+    
+    return (
+      <TouchableOpacity
+        className="bg-surface rounded-xl p-4 mb-3 shadow-sm border border-border"
+        onPress={() => handleSelectServer(item)}
+        testID={`server-item-${item.id}`}
+        accessible={false}
+      >
+        <View className="flex-row justify-between items-start mb-2">
+          <View className="flex-1 mr-4">
+            <Text className="text-lg font-semibold text-text mb-1" numberOfLines={1}>{item.name}</Text>
+            <Text className="text-sm text-text-muted mb-2" numberOfLines={1}>
+              {item.useSSL ? 'https' : 'http'}://{item.host}:{item.port}
+            </Text>
+            <ServerStatusBadge status={status} serverName={item.name} />
+          </View>
+          
+          <View className="flex-row gap-2">
+            <TouchableOpacity
+              className="px-3 py-1.5 rounded-md bg-primary/10 border border-primary/20"
+              onPress={() => handleEdit(item)}
+              testID={`edit-server-btn-${item.name}`}
+            >
+              <Text className="text-primary font-medium text-sm">Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="px-3 py-1.5 rounded-md bg-danger/10 border border-danger/20"
+              onPress={() => handleDelete(item)}
+              testID={`delete-server-btn-${item.name}`}
+            >
+              <Text className="text-danger font-medium text-sm">Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <StyledSafeAreaView className="flex-1 bg-background" testID="servers-screen">
