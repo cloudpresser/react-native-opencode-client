@@ -1,3 +1,10 @@
+## [2.2.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.2.0...v2.2.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* **ci:** remove maestro test job from EAS workflow (requires paid plan) ([ef6b211](https://github.com/cloudpresser/react-native-opencode-client/commit/ef6b211669ff5a2ac242606a016a9ddeded0edeb))
+
 # [2.2.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.4...v2.2.0) (2026-02-18)
 
 
