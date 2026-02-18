@@ -1,0 +1,4 @@
+# CI/CD files not needed for EAS builds
+.github/
+.maestro/
+package-lock.json
