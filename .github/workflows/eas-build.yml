@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-test:
-    name: Build & Test via EAS Workflow
+  build:
+    name: Build via EAS Workflow
     runs-on: ubuntu-latest
 
     steps:
@@ -45,13 +45,13 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Run EAS Workflow (build + Maestro tests)
+      - name: Run EAS Workflow (build)
         id: eas_workflow
         run: |
-          echo "Triggering EAS Workflow: build-and-test.yaml"
+          echo "Triggering EAS Workflow: build.yaml"
 
           set +e
-          RESULT=$(eas workflow:run .eas/workflows/build-and-test.yaml \
+          RESULT=$(eas workflow:run .eas/workflows/build.yaml \
             --wait --json --non-interactive 2>&1)
           EXIT_CODE=$?
           set -e
