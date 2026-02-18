@@ -89,8 +89,23 @@ jobs:
         run: |
           BUILD_ID=${{ steps.build_tag.outputs.build_id }}
           echo "Downloading APK for build $BUILD_ID"
-          APK_URL=$(eas build:view $BUILD_ID --json | jq -r '.artifacts.buildUrl')
-          echo "APK URL: $APK_URL"
+          
+          # Poll for artifact URL (EAS may take a moment to publish artifacts after build completes)
+          for i in $(seq 1 30); do
+            APK_URL=$(eas build:view $BUILD_ID --json | jq -r '.artifacts.buildUrl')
+            if [ "$APK_URL" != "null" ] && [ -n "$APK_URL" ]; then
+              echo "APK URL: $APK_URL"
+              break
+            fi
+            echo "Attempt $i/30: Artifact not ready yet, waiting 10s..."
+            sleep 10
+          done
+          
+          if [ "$APK_URL" = "null" ] || [ -z "$APK_URL" ]; then
+            echo "::error::Failed to get APK URL after 5 minutes"
+            exit 1
+          fi
+          
           curl -L -o opencode-client-v${{ steps.get_version.outputs.version }}.apk "$APK_URL"
           ls -lh *.apk
 
