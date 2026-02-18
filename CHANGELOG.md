@@ -1,3 +1,11 @@
+## [2.1.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.2...v2.1.3) (2026-02-18)
+
+
+### Bug Fixes
+
+* **ci:** add .yarnrc ignore-engines and remove package-lock.json ([2221e93](https://github.com/cloudpresser/react-native-opencode-client/commit/2221e9369d9d185cfae9462b7ef7eb226ab5515d))
+* **ci:** use yarn in Release workflow and add .easignore ([4b61a56](https://github.com/cloudpresser/react-native-opencode-client/commit/4b61a568a72cff83374c875f98247452ff7b3f4c))
+
 ## [2.1.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.1...v2.1.2) (2026-02-18)
 
 
