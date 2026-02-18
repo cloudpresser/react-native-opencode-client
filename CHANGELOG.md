@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.3.1...v2.4.0) (2026-02-18)
+
+
+### Features
+
+* add markdown rendering, syntax-highlighted code blocks, tool call display, and agent selector to chat ([6d9672c](https://github.com/cloudpresser/react-native-opencode-client/commit/6d9672cf8a30e898b4a0b1d5c0373299733fd2ae))
+
 ## [2.3.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.3.0...v2.3.1) (2026-02-18)
 
 
