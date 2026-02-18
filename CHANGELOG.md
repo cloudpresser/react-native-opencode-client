@@ -1,3 +1,10 @@
+## [2.1.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.0...v2.1.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* **ci:** poll for EAS artifact URL before downloading APK ([7bf9f0a](https://github.com/cloudpresser/react-native-opencode-client/commit/7bf9f0a8b824a3a666a4546d4931e787e42e04af))
+
 # [2.1.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.6...v2.1.0) (2026-02-18)
 
 
