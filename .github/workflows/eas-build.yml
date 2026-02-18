@@ -50,44 +50,47 @@ jobs:
         run: |
           echo "Triggering EAS Workflow: build.yaml"
 
-          set +e
-          RESULT=$(eas workflow:run .eas/workflows/build.yaml \
-            --wait --json --non-interactive 2>&1)
+          set +eo pipefail
+          eas workflow:run .eas/workflows/build.yaml \
+            --wait --json --non-interactive \
+            1>eas_output.txt 2>eas_stderr.txt
           EXIT_CODE=$?
-          set -e
+          set -eo pipefail
 
-          echo "--- EAS Workflow raw output ---"
-          echo "$RESULT"
+          echo "--- EAS Workflow stderr ---"
+          cat eas_stderr.txt || true
+          echo "--- EAS Workflow stdout ---"
+          cat eas_output.txt || true
           echo "--- Exit code: $EXIT_CODE ---"
-
-          # Extract build ID from EAS workflow JSON output
-          # Structure: { jobs: [ { outputs: { build_id }, turtleBuild: { artifacts: { buildUrl } } } ] }
-          BUILD_ID=""
-          for path in \
-            '.jobs[0].outputs.build_id' \
-            '.jobs[0].turtleBuild.id' \
-            '.jobs[0].id'; do
-            CANDIDATE=$(echo "$RESULT" | jq -r "$path" 2>/dev/null | head -1)
-            if [ -n "$CANDIDATE" ] && [ "$CANDIDATE" != "null" ] && [ "$CANDIDATE" != "" ]; then
-              BUILD_ID="$CANDIDATE"
-              echo "Found build_id via jq path: $path"
-              break
-            fi
-          done
-
-          # Also extract APK URL directly from workflow output (avoids polling)
-          APK_DIRECT_URL=$(echo "$RESULT" | jq -r '.jobs[0].turtleBuild.artifacts.buildUrl // empty' 2>/dev/null)
-          if [ -n "$APK_DIRECT_URL" ] && [ "$APK_DIRECT_URL" != "null" ]; then
-            echo "apk_url=$APK_DIRECT_URL" >> $GITHUB_OUTPUT
-            echo "APK URL from workflow output: $APK_DIRECT_URL"
-          fi
-
-          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "Extracted build_id: $BUILD_ID"
 
           if [ $EXIT_CODE -ne 0 ]; then
             echo "::error::EAS Workflow failed (exit code $EXIT_CODE)"
             exit 1
+          fi
+
+          # Strip any non-JSON prefix (e.g. "Waiting for workflow..." messages)
+          # and extract only the JSON object from the output
+          OUTPUT_JSON=$(sed -n '/^{/,$p' eas_output.txt)
+
+          if [ -z "$OUTPUT_JSON" ]; then
+            echo "::warning::No JSON found in EAS workflow output"
+            echo "build_id=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Extract build ID from EAS workflow JSON output
+          # Structure: { jobs: [ { outputs: { build_id }, turtleBuild: { id, artifacts: { buildUrl } } } ] }
+          BUILD_ID=$(echo "$OUTPUT_JSON" | jq -r '.jobs[0].outputs.build_id // .jobs[0].turtleBuild.id // .jobs[0].id // empty') || true
+
+          # Extract APK URL directly from workflow output (avoids polling)
+          APK_DIRECT_URL=$(echo "$OUTPUT_JSON" | jq -r '.jobs[0].turtleBuild.artifacts.buildUrl // empty') || true
+
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Extracted build_id: $BUILD_ID"
+
+          if [ -n "$APK_DIRECT_URL" ] && [ "$APK_DIRECT_URL" != "null" ]; then
+            echo "apk_url=$APK_DIRECT_URL" >> $GITHUB_OUTPUT
+            echo "APK URL from workflow output: $APK_DIRECT_URL"
           fi
 
           if [ -z "$BUILD_ID" ]; then
