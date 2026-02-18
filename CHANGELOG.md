@@ -1,3 +1,10 @@
+# [2.5.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.4.1...v2.5.0) (2026-02-18)
+
+
+### Features
+
+* add base16 theming with build-time theme selection ([85566ad](https://github.com/cloudpresser/react-native-opencode-client/commit/85566ad9db148d5f0fa97a6d55d529150cffc755))
+
 ## [2.4.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.4.0...v2.4.1) (2026-02-18)
 
 
