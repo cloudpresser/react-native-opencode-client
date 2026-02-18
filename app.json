@@ -33,6 +33,20 @@
       "eas": {
         "projectId": "4be15419-5abd-4485-af2d-c98d6bc47ce9"
       }
-    }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "packagingOptions": {
+              "exclude": [
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+              ]
+            }
+          }
+        }
+      ]
+    ]
   }
 }
