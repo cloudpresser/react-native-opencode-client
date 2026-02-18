@@ -1,3 +1,10 @@
+## [2.3.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.3.0...v2.3.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* convert API Unix timestamps to ISO strings for session and message dates ([fc7041a](https://github.com/cloudpresser/react-native-opencode-client/commit/fc7041a93768cd2d4a8641aaf15a665dd707ab7b))
+
 # [2.3.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.2.3...v2.3.0) (2026-02-18)
 
 
