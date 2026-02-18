@@ -7,4 +7,6 @@ appId: com.cloudpresser.opencodeclient
     id: "delete-server-btn-Test Server"
 - tapOn:
     text: "Delete"
+    index: 1
+- waitForAnimationToEnd
 - assertNotVisible: "Test Server"

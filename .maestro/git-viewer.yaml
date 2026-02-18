@@ -6,9 +6,11 @@ env:
 - launchApp
 - runFlow:
     file: create-session.yaml
-- tapOn: "${SESSION_TITLE}"
-- tapOn: "Git"
-- assertVisible: "Modified Files"
+- tapOn: ".*${SESSION_TITLE}.*"
+- tapOn: ".*Git.*"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: ".*Modified Files.*"
 - tapOn:
     id: "refresh-git-btn"
-- assertVisible: "No modified files"
+- assertVisible: ".*No modified files.*"

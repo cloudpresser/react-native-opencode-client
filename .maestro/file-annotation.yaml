@@ -6,9 +6,11 @@ env:
 - launchApp
 - runFlow:
     file: create-session.yaml
-- tapOn: "${SESSION_TITLE}"
-- tapOn: "Annotate"
-- assertVisible: "File Annotations"
+- tapOn: ".*${SESSION_TITLE}.*"
+- tapOn: ".*Annotate.*"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: ".*File Annotations.*"
 - tapOn:
     id: "add-file-btn"
-- assertVisible: "Select files to annotate"
+- assertVisible: ".*Select files to annotate.*"

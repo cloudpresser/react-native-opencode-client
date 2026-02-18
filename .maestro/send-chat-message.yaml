@@ -6,12 +6,14 @@ env:
 - launchApp
 - runFlow:
     file: create-session.yaml
-- tapOn: "${SESSION_TITLE}"
-- assertVisible: "Chat"
+- tapOn: ".*${SESSION_TITLE}.*"
+- assertVisible: ".*Chat.*"
 - tapOn:
     id: "chat-input"
+- waitForAnimationToEnd:
+    timeout: 1000
 - inputText: "Hello, this is a test message!"
 - hideKeyboard
 - tapOn:
     id: "send-message-btn"
-- assertVisible: "Hello, this is a test message!"
+- assertVisible: ".*Hello, this is a test message!.*"

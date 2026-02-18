@@ -5,15 +5,24 @@ env:
 - launchApp
 - runFlow:
     file: add-server.yaml
-- tapOn: "${SERVER_NAME}"
-- assertVisible: "Sessions"
+- tapOn: ".*${SERVER_NAME}.*"
+- assertVisible: ".*Sessions.*"
 - tapOn:
     id: "create-session-btn"
-- assertVisible: "New Session"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    id: "new-session-screen"
+- assertVisible: ".*New Session.*"
 - tapOn:
     id: "session-title-input"
+- waitForAnimationToEnd:
+    timeout: 1000
 - inputText: "Test Session"
 - hideKeyboard
 - tapOn:
-    id: "save-session-btn"
-- assertVisible: "Test Session"
+    id: "create-session-button"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: ".*Test Session.*"
+- assertVisible: ".*Sessions.*"

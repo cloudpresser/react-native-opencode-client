@@ -1,9 +1,9 @@
 appId: com.cloudpresser.opencodeclient
 env:
-  SERVER_NAME: "E2E Test Server"
-  SERVER_HOST: "192.168.1.100"
+  SERVER_NAME: "Test Server"
+  SERVER_HOST: "localhost"
   SERVER_PORT: "4096"
-  SESSION_TITLE: "E2E Test Session"
+  SESSION_TITLE: "Test Session"
 ---
 - launchApp
 - runFlow:

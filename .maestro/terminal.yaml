@@ -6,13 +6,17 @@ env:
 - launchApp
 - runFlow:
     file: create-session.yaml
-- tapOn: "${SESSION_TITLE}"
-- tapOn: "Terminal"
-- assertVisible: "Terminal"
+- tapOn: ".*${SESSION_TITLE}.*"
+- tapOn: ".*Terminal.*"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: ".*Terminal.*"
 - tapOn:
     id: "terminal-input"
+- waitForAnimationToEnd:
+    timeout: 1000
 - inputText: "ls -la"
 - hideKeyboard
 - tapOn:
     id: "terminal-send-btn"
-- assertVisible: "ls -la"
+- assertVisible: ".*ls -la.*"

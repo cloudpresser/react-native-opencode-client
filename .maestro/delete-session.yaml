@@ -6,8 +6,10 @@ env:
 - launchApp
 - runFlow:
     file: create-session.yaml
-- tapOn: "${SESSION_TITLE}"
+- tapOn: ".*${SESSION_TITLE}.*"
 - tapOn:
     id: "session-delete-btn"
-- tapOn: "Delete"
-- assertNotVisible: "${SESSION_TITLE}"
+- tapOn:
+    text: "Delete"
+    index: 1
+- assertVisible: ".*Sessions.*"

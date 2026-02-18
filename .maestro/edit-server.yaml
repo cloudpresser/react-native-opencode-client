@@ -5,13 +5,21 @@ appId: com.cloudpresser.opencodeclient
     file: add-server.yaml
 - tapOn:
     id: "edit-server-btn-Test Server"
-- assertVisible: "Edit Server"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    id: "add-edit-server-screen"
 - tapOn:
     id: "server-name-input"
+- waitForAnimationToEnd:
+    timeout: 1000
 - eraseText
 - inputText: "Updated Server"
 - hideKeyboard
 - tapOn:
-    id: "save-server-btn"
+    id: "save-server-button"
+- waitForAnimationToEnd:
+    timeout: 2000
 - assertVisible: "Updated Server"
 - assertNotVisible: "Test Server"
+- assertVisible: "OpenCode Servers"
