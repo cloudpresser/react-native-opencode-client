@@ -2,7 +2,14 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Server, Session, ChatMessage, GitFile, FileAnnotation } from '../types';
 
+type ThemeMode = 'light' | 'dark' | 'system';
+
 interface AppState {
+  // Theme
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => Promise<void>;
+  loadTheme: () => Promise<void>;
+
   // Servers
   servers: Server[];
   selectedServer: Server | null;
@@ -41,14 +48,37 @@ interface AppState {
 const SERVERS_KEY = '@opencode_servers';
 const SESSIONS_KEY = '@opencode_sessions';
 const MESSAGES_KEY = '@opencode_messages';
+const THEME_KEY = '@opencode_theme';
 
 export const useStore = create<AppState>((set, get) => ({
+  // Theme
+  theme: 'system',
+  
+  setTheme: async (theme: ThemeMode) => {
+    set({ theme });
+    await AsyncStorage.setItem(THEME_KEY, theme);
+  },
+  
+  loadTheme: async () => {
+    const data = await AsyncStorage.getItem(THEME_KEY);
+    if (data) {
+      set({ theme: data as ThemeMode });
+    }
+  },
+
   // Servers
   servers: [],
   selectedServer: null,
   
   addServer: async (server: Server) => {
-    const servers = [...get().servers, server];
+    const existing = get().servers.find(s => s.name === server.name);
+    let servers;
+    if (existing) {
+      // Update existing server with the same name instead of creating a duplicate
+      servers = get().servers.map(s => s.name === server.name ? { ...s, ...server, id: s.id } : s);
+    } else {
+      servers = [...get().servers, server];
+    }
     set({ servers });
     await AsyncStorage.setItem(SERVERS_KEY, JSON.stringify(servers));
   },
