@@ -1,3 +1,10 @@
+## [2.1.4](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.3...v2.1.4) (2026-02-18)
+
+
+### Bug Fixes
+
+* **ci:** use yarn instead of npm ci in EAS Build workflow ([d8bfa1b](https://github.com/cloudpresser/react-native-opencode-client/commit/d8bfa1b28ec43307445d6cf88baa343741e55264))
+
 ## [2.1.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.2...v2.1.3) (2026-02-18)
 
 
