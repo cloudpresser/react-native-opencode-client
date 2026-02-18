@@ -60,13 +60,13 @@ jobs:
           echo "$RESULT"
           echo "--- Exit code: $EXIT_CODE ---"
 
-          # Try multiple jq paths to extract the build ID from workflow output
+          # Extract build ID from EAS workflow JSON output
+          # Structure: { jobs: [ { outputs: { build_id }, turtleBuild: { artifacts: { buildUrl } } } ] }
           BUILD_ID=""
           for path in \
-            '.[0].outputs.build_id' \
-            '.jobs.build_android.outputs.build_id' \
-            '.. | .build_id? // empty' \
-            '.[0].id'; do
+            '.jobs[0].outputs.build_id' \
+            '.jobs[0].turtleBuild.id' \
+            '.jobs[0].id'; do
             CANDIDATE=$(echo "$RESULT" | jq -r "$path" 2>/dev/null | head -1)
             if [ -n "$CANDIDATE" ] && [ "$CANDIDATE" != "null" ] && [ "$CANDIDATE" != "" ]; then
               BUILD_ID="$CANDIDATE"
@@ -74,6 +74,13 @@ jobs:
               break
             fi
           done
+
+          # Also extract APK URL directly from workflow output (avoids polling)
+          APK_DIRECT_URL=$(echo "$RESULT" | jq -r '.jobs[0].turtleBuild.artifacts.buildUrl // empty' 2>/dev/null)
+          if [ -n "$APK_DIRECT_URL" ] && [ "$APK_DIRECT_URL" != "null" ]; then
+            echo "apk_url=$APK_DIRECT_URL" >> $GITHUB_OUTPUT
+            echo "APK URL from workflow output: $APK_DIRECT_URL"
+          fi
 
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
           echo "Extracted build_id: $BUILD_ID"
@@ -93,17 +100,22 @@ jobs:
           BUILD_ID=${{ steps.eas_workflow.outputs.build_id }}
           echo "Downloading APK for build $BUILD_ID"
 
-          # Poll for artifact URL (EAS may take a moment to publish artifacts)
-          APK_URL=""
-          for i in $(seq 1 30); do
-            APK_URL=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.artifacts.buildUrl // empty')
-            if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
-              echo "APK URL found: $APK_URL"
-              break
-            fi
-            echo "Attempt $i/30: Artifact not ready yet, waiting 10s..."
-            sleep 10
-          done
+          # Use direct URL from workflow output if available, otherwise poll
+          APK_URL="${{ steps.eas_workflow.outputs.apk_url }}"
+          if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
+            echo "Using APK URL from workflow output: $APK_URL"
+          else
+            echo "No direct URL, polling eas build:view..."
+            for i in $(seq 1 30); do
+              APK_URL=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.artifacts.buildUrl // empty')
+              if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
+                echo "APK URL found: $APK_URL"
+                break
+              fi
+              echo "Attempt $i/30: Artifact not ready yet, waiting 10s..."
+              sleep 10
+            done
+          fi
 
           if [ -z "$APK_URL" ] || [ "$APK_URL" = "null" ]; then
             echo "::error::Failed to get APK URL after 5 minutes"
