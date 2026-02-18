@@ -1,3 +1,16 @@
+# [2.1.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.6...v2.1.0) (2026-02-18)
+
+
+### Bug Fixes
+
+* add testIDs and accessible props across all components for E2E testing ([9a54241](https://github.com/cloudpresser/react-native-opencode-client/commit/9a54241a86b3bc03b4af3524777ba61dd1030722))
+* prevent port concatenation, double-tap save, and server/session dedup ([15c2282](https://github.com/cloudpresser/react-native-opencode-client/commit/15c228256b50a43d7752717209d0c259b14e3213))
+
+
+### Features
+
+* add new screens for session creation, git diff viewer, and theme hook ([1454879](https://github.com/cloudpresser/react-native-opencode-client/commit/14548793732d59fa79b98e9ec9a2bedef0d1dc8d))
+
 ## [2.0.6](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.0.5...v2.0.6) (2026-02-17)
 
 
