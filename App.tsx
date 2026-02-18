@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
-import { useColorScheme, View } from 'react-native';
-import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
+import React from 'react';
+import { View } from 'react-native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Uniwind, withUniwind } from 'uniwind';
+import { withUniwind } from 'uniwind';
 
 const StyledView = withUniwind(View);
 import ServersScreen from './src/screens/servers/ServersScreen';
@@ -14,36 +14,18 @@ import AddEditServerScreen from './src/screens/servers/AddEditServerScreen';
 import NewSessionScreen from './src/screens/sessions/NewSessionScreen';
 import GitDiffViewerScreen from './src/screens/git/GitDiffViewerScreen';
 import { RootStackParamList } from './src/navigation/types';
-import { useStore } from './src/store';
 import { ServerStatusProvider } from './src/context/ServerStatusContext';
 import './src/global.css';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
-  const systemColorScheme = useColorScheme();
-  const { theme, loadTheme, setTheme } = useStore();
-
-  useEffect(() => {
-    loadTheme();
-  }, []);
-
-  useEffect(() => {
-    if (theme === 'system') {
-      Uniwind.setTheme(systemColorScheme === 'dark' ? 'dark' : 'light');
-    } else {
-      Uniwind.setTheme(theme);
-    }
-  }, [theme, systemColorScheme]);
-
-  const navigationTheme = systemColorScheme === 'dark' ? DarkTheme : DefaultTheme;
-
   return (
     <SafeAreaProvider>
       <ServerStatusProvider>
         <StyledView className="flex-1 bg-background">
-          <NavigationContainer theme={navigationTheme}>
-            <StatusBar style={systemColorScheme === 'dark' ? 'light' : 'dark'} />
+          <NavigationContainer theme={DarkTheme}>
+            <StatusBar style="light" />
             <Stack.Navigator
               initialRouteName="Servers"
               screenOptions={{

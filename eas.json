@@ -5,23 +5,32 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "THEME": "tokyo-night-dark"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk",
-      "credentialsSource": "remote"
-    }
-  },
-  "production": {
-    "android": {
-      "buildType": "apk",
-      "credentialsSource": "remote"
+        "credentialsSource": "remote"
+      },
+      "env": {
+        "THEME": "tokyo-night-dark"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote"
       },
       "ios": {
         "buildConfiguration": "Release",
         "credentialsSource": "remote"
+      },
+      "env": {
+        "THEME": "tokyo-night-dark"
       }
     }
   },

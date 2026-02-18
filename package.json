@@ -3,10 +3,15 @@
   "version": "0.0.0",
   "main": "index.ts",
   "scripts": {
+    "prestart": "node scripts/build-theme.js",
     "start": "expo start",
+    "predev": "node scripts/build-theme.js",
     "dev": "expo start",
+    "preandroid": "node scripts/build-theme.js",
     "android": "expo run:android",
+    "preios": "node scripts/build-theme.js",
     "ios": "expo run:ios",
+    "preweb": "node scripts/build-theme.js",
     "web": "expo start --web",
     "release": "semantic-release"
   },
