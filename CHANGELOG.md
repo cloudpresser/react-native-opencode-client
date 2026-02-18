@@ -1,3 +1,10 @@
+## [2.2.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.2.1...v2.2.2) (2026-02-18)
+
+
+### Bug Fixes
+
+* **ci:** correct jq paths for EAS workflow JSON output and extract APK URL directly ([65a12b2](https://github.com/cloudpresser/react-native-opencode-client/commit/65a12b21a2a7d72903555294b866496cae52cbb8))
+
 ## [2.2.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.2.0...v2.2.1) (2026-02-18)
 
 
