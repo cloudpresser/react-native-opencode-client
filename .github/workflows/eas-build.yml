@@ -66,34 +66,65 @@ jobs:
           EOF
           echo "Credentials configured"
 
-      - name: Build Android APK (Preview)
-        if: startsWith(github.ref, 'refs/tags/v')
-        id: build_tag
+      - name: Build Android APK
+        id: eas_build
         run: |
-          echo "Building preview APK for version ${{ steps.get_version.outputs.version }}"
-          BUILD_ID=$(eas build --platform android --profile preview --non-interactive --wait --json --message "Release v${{ steps.get_version.outputs.version }}" | jq -r '.[0].id')
-          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            MSG="Release v${{ steps.get_version.outputs.version }}"
+          else
+            MSG="Manual build from ${{ github.sha }}"
+          fi
+          echo "Building APK: $MSG"
+          
+          # Capture full EAS output for debugging
+          set +e
+          EAS_OUTPUT=$(eas build --platform android --profile preview --non-interactive --wait --json --message "$MSG" 2>&1)
+          EAS_EXIT=$?
+          set -e
+          
+          echo "--- EAS CLI output ---"
+          echo "$EAS_OUTPUT"
+          echo "--- End EAS CLI output (exit code: $EAS_EXIT) ---"
+          
+          # Try to extract build ID from JSON output
+          BUILD_ID=$(echo "$EAS_OUTPUT" | jq -r '.[0].id // empty' 2>/dev/null || true)
+          BUILD_STATUS=$(echo "$EAS_OUTPUT" | jq -r '.[0].status // empty' 2>/dev/null || true)
+          
           echo "Build ID: $BUILD_ID"
-      
-      - name: Build Android APK (Manual)
-        if: github.event_name == 'workflow_dispatch'
-        id: build_manual
-        run: |
-          echo "Building manual APK"
-          BUILD_ID=$(eas build --platform android --profile preview --non-interactive --wait --json --message "Manual build from ${{ github.sha }}" | jq -r '.[0].id')
+          echo "Build Status: $BUILD_STATUS"
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "Build ID: $BUILD_ID"
+          echo "build_status=$BUILD_STATUS" >> $GITHUB_OUTPUT
+          
+          if [ $EAS_EXIT -ne 0 ] || [ -z "$BUILD_ID" ]; then
+            echo "::error::EAS build command failed (exit $EAS_EXIT)"
+            # Try to get build details if we have an ID
+            if [ -n "$BUILD_ID" ]; then
+              echo "--- Build details ---"
+              eas build:view "$BUILD_ID" --json 2>&1 | jq '.' || true
+              echo "--- Build logs URL ---"
+              echo "https://expo.dev/accounts/cloudpresser/projects/react-native-opencode-client/builds/$BUILD_ID"
+            fi
+            exit 1
+          fi
+          
+          if [ "$BUILD_STATUS" = "ERRORED" ] || [ "$BUILD_STATUS" = "CANCELED" ]; then
+            echo "::error::EAS build finished with status: $BUILD_STATUS"
+            echo "--- Build details ---"
+            eas build:view "$BUILD_ID" --json 2>&1 | jq '.' || true
+            echo "https://expo.dev/accounts/cloudpresser/projects/react-native-opencode-client/builds/$BUILD_ID"
+            exit 1
+          fi
 
       - name: Download APK
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.eas_build.outputs.build_status == 'FINISHED'
         run: |
-          BUILD_ID=${{ steps.build_tag.outputs.build_id }}
+          BUILD_ID=${{ steps.eas_build.outputs.build_id }}
           echo "Downloading APK for build $BUILD_ID"
           
           # Poll for artifact URL (EAS may take a moment to publish artifacts after build completes)
           for i in $(seq 1 30); do
-            APK_URL=$(eas build:view $BUILD_ID --json | jq -r '.artifacts.buildUrl')
-            if [ "$APK_URL" != "null" ] && [ -n "$APK_URL" ]; then
+            APK_URL=$(eas build:view $BUILD_ID --json 2>/dev/null | jq -r '.artifacts.buildUrl // empty')
+            if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
               echo "APK URL: $APK_URL"
               break
             fi
@@ -101,8 +132,9 @@ jobs:
             sleep 10
           done
           
-          if [ "$APK_URL" = "null" ] || [ -z "$APK_URL" ]; then
+          if [ -z "$APK_URL" ] || [ "$APK_URL" = "null" ]; then
             echo "::error::Failed to get APK URL after 5 minutes"
+            eas build:view $BUILD_ID --json 2>&1 | jq '.' || true
             exit 1
           fi
           
@@ -110,7 +142,7 @@ jobs:
           ls -lh *.apk
 
       - name: Upload APK to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.eas_build.outputs.build_status == 'FINISHED'
         uses: softprops/action-gh-release@v1
         with:
           files: opencode-client-v${{ steps.get_version.outputs.version }}.apk
