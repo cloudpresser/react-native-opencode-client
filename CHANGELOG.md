@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.2.3...v2.3.0) (2026-02-18)
+
+
+### Features
+
+* pre-load messages from server, add pull-to-refresh pagination ([93e2b7e](https://github.com/cloudpresser/react-native-opencode-client/commit/93e2b7ec647bf877cb51395ea3af149b88e9685d))
+
 ## [2.2.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.2.2...v2.2.3) (2026-02-18)
 
 
