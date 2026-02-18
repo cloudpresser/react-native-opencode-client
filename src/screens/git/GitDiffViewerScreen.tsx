@@ -13,6 +13,11 @@ import { useThemeColors } from '../../hooks/useThemeColors';
 
 type GitDiffViewerScreenRouteProp = RouteProp<RootStackParamList, 'GitDiffViewer'>;
 
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { withUniwind } from 'uniwind';
+
+const StyledSafeAreaView = withUniwind(SafeAreaView);
+
 export default function GitDiffViewerScreen() {
   const route = useRoute<GitDiffViewerScreenRouteProp>();
   const navigation = useNavigation();
@@ -62,7 +67,7 @@ export default function GitDiffViewerScreen() {
   };
 
   return (
-    <View className="flex-1 bg-surface-elevated" testID="git-diff-viewer-screen">
+    <StyledSafeAreaView className="flex-1 bg-surface-elevated" testID="git-diff-viewer-screen">
       <View className="flex-row justify-between items-center p-4 bg-surface border-b border-border">
         <TouchableOpacity onPress={() => navigation.goBack()} testID="back-button">
           <Text className="text-base text-primary min-w-[60]">← Back</Text>
@@ -90,6 +95,6 @@ export default function GitDiffViewerScreen() {
           </ScrollView>
         </ScrollView>
       )}
-    </View>
+    </StyledSafeAreaView>
   );
 }

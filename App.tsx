@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, View } from 'react-native';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Uniwind, withUniwind } from 'uniwind';
 
-const StyledSafeAreaView = withUniwind(SafeAreaView);
+const StyledView = withUniwind(View);
 import ServersScreen from './src/screens/servers/ServersScreen';
 import SessionsScreen from './src/screens/sessions/SessionsScreen';
 import SessionDetailScreen from './src/screens/session-detail/SessionDetailScreen';
@@ -39,7 +39,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StyledSafeAreaView className="flex-1 bg-background">
+      <StyledView className="flex-1 bg-background">
         <NavigationContainer theme={navigationTheme}>
           <StatusBar style={systemColorScheme === 'dark' ? 'light' : 'dark'} />
           <Stack.Navigator
@@ -56,7 +56,7 @@ export default function App() {
             <Stack.Screen name="GitDiffViewer" component={GitDiffViewerScreen} />
           </Stack.Navigator>
         </NavigationContainer>
-      </StyledSafeAreaView>
+      </StyledView>
     </SafeAreaProvider>
   );
 }
