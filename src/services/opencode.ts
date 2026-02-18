@@ -2,15 +2,78 @@ import { Server, Session, GitFile } from '../types';
 import EventSource from 'react-native-sse';
 import base64 from 'base-64';
 
-export interface MessagePart {
-  type: 'text' | 'image' | 'file';
-  text?: string;
-  image?: string;
-  data?: string;
-  url?: string;
+export interface TextPart {
+  type: 'text';
+  text: string;
+}
+
+export interface ReasoningPart {
+  type: 'reasoning';
+  text: string;
+}
+
+export interface ToolInvocationCall {
+  state: 'call' | 'partial-call';
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, any>;
+  step?: number;
+}
+
+export interface ToolInvocationResult {
+  state: 'result';
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, any>;
+  result: string;
+  step?: number;
+}
+
+export type ToolInvocation = ToolInvocationCall | ToolInvocationResult;
+
+export interface ToolInvocationPart {
+  type: 'tool-invocation';
+  toolInvocation: ToolInvocation;
+}
+
+export interface SourceUrlPart {
+  type: 'source-url';
+  sourceId: string;
+  url: string;
+  title?: string;
+}
+
+export interface StepStartPart {
+  type: 'step-start';
+}
+
+export interface FilePart {
+  type: 'file';
+  mediaType?: string;
   filename?: string;
-  mime?: string;
+  url?: string;
+  data?: string;
   mimeType?: string;
+}
+
+export interface ImagePart {
+  type: 'image';
+  image?: string;
+}
+
+export type MessagePart =
+  | TextPart
+  | ReasoningPart
+  | ToolInvocationPart
+  | SourceUrlPart
+  | StepStartPart
+  | FilePart
+  | ImagePart;
+
+export interface ToolMetadata {
+  title?: string;
+  time?: { start?: number; end?: number };
+  [key: string]: any;
 }
 
 export interface Message {
@@ -21,6 +84,15 @@ export interface Message {
     time: {
       created: number;
       completed?: number;
+    };
+  };
+  metadata?: {
+    tool?: Record<string, ToolMetadata>;
+    assistant?: {
+      modelID?: string;
+      providerID?: string;
+      cost?: number;
+      tokens?: { input?: number; output?: number; reasoning?: number };
     };
   };
   parts: MessagePart[];

@@ -1,5 +1,15 @@
 export type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
 
+export type SSHConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+export interface SSHConfig {
+  host: string;
+  port: number;
+  username: string;
+  privateKey?: string;
+  passphrase?: string;
+}
+
 export interface Server {
   id: string;
   name: string;
@@ -7,6 +17,10 @@ export interface Server {
   port: number;
   useSSL: boolean;
   apiKey?: string;
+  sshPort?: number;
+  sshUsername?: string;
+  sshPrivateKey?: string;
+  sshPassphrase?: string;
 }
 
 export interface Session {
@@ -17,10 +31,26 @@ export interface Session {
   updatedAt?: string;
 }
 
+export interface ChatMessageToolCall {
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, any>;
+  state: 'call' | 'partial-call' | 'result';
+  result?: string;
+  title?: string;
+}
+
+export interface ChatMessagePart {
+  type: 'text' | 'tool-call' | 'reasoning';
+  content?: string;
+  toolCall?: ChatMessageToolCall;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string; // plain-text fallback / user messages
+  parts?: ChatMessagePart[];
   attachments?: MessageAttachment[];
   timestamp: string;
 }

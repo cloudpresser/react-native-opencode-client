@@ -9,15 +9,20 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
+  Pressable,
+  ScrollView,
 } from 'react-native';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
-import { ChatMessage, MessageAttachment, Server, Session } from '../../types';
-import { OpenCodeService, Message as ApiMessage } from '../../services/opencode';
+import { ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
+import { OpenCodeService, Message as ApiMessage, ToolMetadata } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import MarkdownRenderer from './MarkdownRenderer';
+import ToolCallDisplay from './ToolCallDisplay';
 
 const StyledImage = withUniwind(Image);
 const StyledActivityIndicator = withUniwind(ActivityIndicator);
@@ -31,34 +36,68 @@ const INITIAL_LOAD_LIMIT = 10;
 const PAGINATION_LIMIT = 10;
 
 function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
-  const textParts = apiMsg.parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text' && !!p.text);
-  const content = textParts.map(p => p.text).join('\n');
-  
+  const chatParts: ChatMessagePart[] = [];
   const attachments: MessageAttachment[] = [];
+  let plainContent = '';
+
+  const toolMeta = apiMsg.metadata?.tool ?? {};
+
   for (const part of apiMsg.parts) {
-    if (part.type === 'image' && part.image) {
-      attachments.push({
-        id: `${apiMsg.info.id}-img-${attachments.length}`,
-        type: 'image',
-        uri: part.image.startsWith('data:') ? part.image : `data:image/png;base64,${part.image}`,
-        name: `image_${attachments.length}.png`,
-        mimeType: 'image/png',
-      });
-    } else if (part.type === 'file' && part.data) {
-      attachments.push({
-        id: `${apiMsg.info.id}-file-${attachments.length}`,
-        type: 'file',
-        uri: part.data,
-        name: `file_${attachments.length}`,
-        mimeType: part.mimeType || 'application/octet-stream',
-      });
+    switch (part.type) {
+      case 'text':
+        chatParts.push({ type: 'text', content: part.text });
+        plainContent += part.text;
+        break;
+      case 'reasoning':
+        chatParts.push({ type: 'reasoning', content: part.text });
+        break;
+      case 'tool-invocation': {
+        const inv = part.toolInvocation;
+        const meta: ToolMetadata | undefined = toolMeta[inv.toolCallId];
+        chatParts.push({
+          type: 'tool-call',
+          toolCall: {
+            toolCallId: inv.toolCallId,
+            toolName: inv.toolName,
+            args: inv.args,
+            state: inv.state,
+            result: inv.state === 'result' ? inv.result : undefined,
+            title: meta?.title,
+          },
+        });
+        break;
+      }
+      case 'image':
+        if (part.image) {
+          attachments.push({
+            id: `${apiMsg.info.id}-img-${attachments.length}`,
+            type: 'image',
+            uri: part.image.startsWith('data:') ? part.image : `data:image/png;base64,${part.image}`,
+            name: `image_${attachments.length}.png`,
+            mimeType: 'image/png',
+          });
+        }
+        break;
+      case 'file':
+        if (part.data || part.url) {
+          attachments.push({
+            id: `${apiMsg.info.id}-file-${attachments.length}`,
+            type: 'file',
+            uri: part.url || part.data || '',
+            name: part.filename || `file_${attachments.length}`,
+            mimeType: part.mimeType || part.mediaType || 'application/octet-stream',
+          });
+        }
+        break;
+      // step-start and source-url are structural, skip
     }
   }
 
   return {
     id: apiMsg.info.id,
     role: apiMsg.info.role,
-    content,
+    content: plainContent,
+    parts: chatParts.length > 0 ? chatParts : undefined,
     timestamp: apiMsg.info.time?.created
       ? new Date(apiMsg.info.time.created * 1000).toISOString()
       : new Date().toISOString(),
@@ -77,6 +116,15 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [streamingText, setStreamingText] = useState('');
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
+
+  const [selectedAgent, setSelectedAgent] = useState<string>('coder');
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
+
+  const AGENTS = [
+    { id: 'coder', label: 'Coder', description: 'Default coding agent' },
+    { id: 'task', label: 'Task', description: 'Task-oriented agent' },
+    { id: 'explore', label: 'Explore', description: 'Codebase exploration' },
+  ];
 
   const sessionMessages = messages[session.id] || [];
   const canLoadMore = hasMoreMessages[session.id] ?? true;
@@ -274,41 +322,120 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     }
   };
 
-  const renderMessage = ({ item }: { item: ChatMessage }): React.ReactElement => (
-    <View
-      className={`p-3 rounded-xl mb-3 max-w-[80%] ${item.role === 'user' ? 'bg-primary self-end' : 'bg-surface self-start border border-border'}`}
-      testID={`message-${item.role}-${item.id}`}
-    >
-      <View className="flex-row justify-between mb-1">
-        <Text className={item.role === 'user' ? 'text-white font-semibold text-xs' : 'text-text-muted font-semibold text-xs'}>
-          {item.role === 'user' ? 'You' : 'Assistant'}
-        </Text>
-        <Text className={item.role === 'user' ? 'text-white/70 text-[10px]' : 'text-text-subtle text-[10px]'}>
-          {new Date(item.timestamp).toLocaleTimeString()}
-        </Text>
-      </View>
-      
-      {item.attachments && item.attachments.length > 0 && (
-        <View className="mb-2">
-          {item.attachments.map((att) => (
-            <View key={att.id} className="mb-2">
-              {att.type === 'image' ? (
-                <StyledImage source={{ uri: att.uri }} className="w-48 h-48 rounded-lg" />
-              ) : (
-                <View className="bg-border-muted p-2 rounded-md">
-                  <Text className="text-xs text-text">{att.name}</Text>
+  const renderMessageContent = (item: ChatMessage) => {
+    const isUser = item.role === 'user';
+    const parts = item.parts;
+
+    // If no parts, fall back to plain content rendered as markdown
+    if (!parts || parts.length === 0) {
+      if (isUser) {
+        return <Text className="text-white text-[15px] leading-5">{item.content}</Text>;
+      }
+      return <MarkdownRenderer content={item.content} />;
+    }
+
+    return (
+      <>
+        {parts.map((part, idx) => {
+          switch (part.type) {
+            case 'text':
+              if (isUser) {
+                return (
+                  <Text key={idx} className="text-white text-[15px] leading-5">
+                    {part.content}
+                  </Text>
+                );
+              }
+              return <MarkdownRenderer key={idx} content={part.content || ''} />;
+
+            case 'tool-call':
+              if (part.toolCall) {
+                return <ToolCallDisplay key={part.toolCall.toolCallId || idx} toolCall={part.toolCall} />;
+              }
+              return null;
+
+            case 'reasoning':
+              return (
+                <View key={idx} className="border-l-2 border-info pl-2 mb-2 opacity-70">
+                  <Text className="text-text-muted text-[10px] font-semibold mb-0.5">Thinking</Text>
+                  <Text className="text-text-muted text-[13px] italic leading-4">
+                    {part.content}
+                  </Text>
                 </View>
-              )}
+              );
+
+            default:
+              return null;
+          }
+        })}
+      </>
+    );
+  };
+
+  const renderMessage = ({ item }: { item: ChatMessage }): React.ReactElement => {
+    const isUser = item.role === 'user';
+
+    return (
+      <View
+        className={`rounded-xl mb-3 ${isUser ? 'self-end max-w-[80%]' : 'self-start w-full'}`}
+        testID={`message-${item.role}-${item.id}`}
+      >
+        {/* User messages get the bubble style */}
+        {isUser ? (
+          <View className="bg-primary p-3 rounded-xl">
+            <View className="flex-row justify-between mb-1">
+              <Text className="text-white font-semibold text-xs">You</Text>
+              <Text className="text-white/70 text-[10px]">
+                {new Date(item.timestamp).toLocaleTimeString()}
+              </Text>
             </View>
-          ))}
-        </View>
-      )}
-      
-      <Text className={item.role === 'user' ? 'text-white text-[15px] leading-5' : 'text-text text-[15px] leading-5'}>
-        {item.content}
-      </Text>
-    </View>
-  );
+            {item.attachments && item.attachments.length > 0 && (
+              <View className="mb-2">
+                {item.attachments.map((att) => (
+                  <View key={att.id} className="mb-2">
+                    {att.type === 'image' ? (
+                      <StyledImage source={{ uri: att.uri }} className="w-48 h-48 rounded-lg" />
+                    ) : (
+                      <View className="bg-white/20 p-2 rounded-md">
+                        <Text className="text-xs text-white">{att.name}</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+            {renderMessageContent(item)}
+          </View>
+        ) : (
+          /* Assistant messages: full-width, no bubble, parts render inline */
+          <View className="py-2">
+            <View className="flex-row justify-between mb-1 px-1">
+              <Text className="text-text-muted font-semibold text-xs">Assistant</Text>
+              <Text className="text-text-subtle text-[10px]">
+                {new Date(item.timestamp).toLocaleTimeString()}
+              </Text>
+            </View>
+            {item.attachments && item.attachments.length > 0 && (
+              <View className="mb-2">
+                {item.attachments.map((att) => (
+                  <View key={att.id} className="mb-2">
+                    {att.type === 'image' ? (
+                      <StyledImage source={{ uri: att.uri }} className="w-48 h-48 rounded-lg" />
+                    ) : (
+                      <View className="bg-border-muted p-2 rounded-md">
+                        <Text className="text-xs text-text">{att.name}</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+            {renderMessageContent(item)}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderAttachment = ({ item }: { item: MessageAttachment }): React.ReactElement => (
     <View className="flex-row items-center bg-border-muted rounded-full px-3 py-1.5 mr-2 max-w-[150px]">
@@ -369,9 +496,9 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         }
         ListFooterComponent={
           streamingText ? (
-            <View className="bg-surface self-start p-3 rounded-xl border border-border max-w-[80%]" testID="streaming-message">
-              <Text className="text-text-muted font-semibold text-xs mb-1">Assistant</Text>
-              <Text className="text-text text-[15px] leading-5">{streamingText}</Text>
+            <View className="self-start w-full py-2" testID="streaming-message">
+              <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
+              <MarkdownRenderer content={streamingText} />
               <StyledActivityIndicator className="mt-2" />
             </View>
           ) : null
@@ -398,48 +525,101 @@ keyExtractor={(item: MessageAttachment) => item.id}
         />
       )}
 
-      <View className="flex-row items-end p-3 bg-surface border-t border-border">
-        <TouchableOpacity 
-          className="p-2 mr-1"
-          onPress={handlePickFile}
-          testID="attach-file-button"
-        >
-          <Text className="text-xl">📎</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          className="p-2 mr-1"
-          onPress={handlePickImage}
-          testID="attach-image-button"
-        >
-          <Text className="text-xl">🖼️</Text>
-        </TouchableOpacity>
+      <View className="bg-surface border-t border-border">
+        {/* Agent selector row */}
+        <View className="flex-row items-center px-3 pt-2 pb-1">
+          <Text className="text-text-subtle text-xs mr-2">Agent:</Text>
+          <TouchableOpacity
+            onPress={() => setShowAgentPicker(true)}
+            className="flex-row items-center bg-surface-elevated px-2.5 py-1 rounded-full border border-border"
+            testID="agent-selector"
+          >
+            <Text className="text-text text-xs font-medium">{AGENTS.find(a => a.id === selectedAgent)?.label ?? selectedAgent}</Text>
+            <Text className="text-text-muted text-[10px] ml-1">▼</Text>
+          </TouchableOpacity>
+        </View>
 
-        <TextInput
-          className="flex-1 border border-border rounded-full px-4 py-2 text-base max-h-24 mr-2 text-text"
-          placeholder="Type a message..."
-          placeholderTextColor={colors.textSubtle}
-          value={input}
-          onChangeText={setInput}
-          multiline
-          maxLength={10000}
-          editable={!loading}
-          testID="chat-input"
-        />
+        {/* Input row */}
+        <View className="flex-row items-end px-3 pb-3 pt-1">
+          <TouchableOpacity 
+            className="p-2 mr-1"
+            onPress={handlePickFile}
+            testID="attach-file-button"
+          >
+            <Text className="text-xl">📎</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            className="p-2 mr-1"
+            onPress={handlePickImage}
+            testID="attach-image-button"
+          >
+            <Text className="text-xl">🖼️</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          className={`rounded-full px-5 py-2.5 justify-center items-center ${loading ? 'bg-border-muted' : 'bg-primary'}`}
-          onPress={handleSend}
-          disabled={loading}
-          testID="send-message-btn"
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text className="text-white font-semibold">Send</Text>
-          )}
-        </TouchableOpacity>
+          <TextInput
+            className="flex-1 border border-border rounded-full px-4 py-2 text-base max-h-24 mr-2 text-text"
+            placeholder="Type a message..."
+            placeholderTextColor={colors.textSubtle}
+            value={input}
+            onChangeText={setInput}
+            multiline
+            maxLength={10000}
+            editable={!loading}
+            testID="chat-input"
+          />
+
+          <TouchableOpacity
+            className={`rounded-full px-5 py-2.5 justify-center items-center ${loading ? 'bg-border-muted' : 'bg-primary'}`}
+            onPress={handleSend}
+            disabled={loading}
+            testID="send-message-btn"
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text className="text-white font-semibold">Send</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Agent picker modal */}
+      <Modal
+        visible={showAgentPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAgentPicker(false)}
+      >
+        <Pressable
+          className="flex-1 bg-overlay justify-end"
+          onPress={() => setShowAgentPicker(false)}
+        >
+          <View className="bg-surface rounded-t-2xl p-4 pb-8">
+            <Text className="text-text font-semibold text-base mb-3">Select Agent</Text>
+            {AGENTS.map((agent) => (
+              <TouchableOpacity
+                key={agent.id}
+                className={`flex-row items-center p-3 rounded-lg mb-1 ${selectedAgent === agent.id ? 'bg-primary/10 border border-primary' : 'border border-transparent'}`}
+                onPress={() => {
+                  setSelectedAgent(agent.id);
+                  setShowAgentPicker(false);
+                }}
+              >
+                <View className="flex-1">
+                  <Text className={`text-sm font-medium ${selectedAgent === agent.id ? 'text-primary' : 'text-text'}`}>
+                    {agent.label}
+                  </Text>
+                  <Text className="text-text-subtle text-xs">{agent.description}</Text>
+                </View>
+                {selectedAgent === agent.id && (
+                  <Text className="text-primary text-sm">✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
