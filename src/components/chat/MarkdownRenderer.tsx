@@ -17,26 +17,26 @@ export default function MarkdownRenderer({ content, isUser }: MarkdownRendererPr
     () =>
       StyleSheet.create({
         body: {
-          color: isUser ? '#fff' : colors.text,
+          color: isUser ? colors.onPrimary : colors.text,
           fontSize: 15,
           lineHeight: 22,
         },
         heading1: {
-          color: isUser ? '#fff' : colors.text,
+          color: isUser ? colors.onPrimary : colors.text,
           fontSize: 22,
           fontWeight: '700' as const,
           marginTop: 12,
           marginBottom: 6,
         },
         heading2: {
-          color: isUser ? '#fff' : colors.text,
+          color: isUser ? colors.onPrimary : colors.text,
           fontSize: 19,
           fontWeight: '700' as const,
           marginTop: 10,
           marginBottom: 4,
         },
         heading3: {
-          color: isUser ? '#fff' : colors.text,
+          color: isUser ? colors.onPrimary : colors.text,
           fontSize: 17,
           fontWeight: '600' as const,
           marginTop: 8,
@@ -53,20 +53,20 @@ export default function MarkdownRenderer({ content, isUser }: MarkdownRendererPr
           fontStyle: 'italic' as const,
         },
         link: {
-          color: isUser ? '#93c5fd' : colors.primary,
+          color: isUser ? colors.link : colors.primary,
           textDecorationLine: 'underline' as const,
         },
         blockquote: {
-          backgroundColor: isUser ? 'rgba(255,255,255,0.1)' : colors.surfaceElevated,
-          borderLeftColor: isUser ? 'rgba(255,255,255,0.4)' : colors.border,
+          backgroundColor: isUser ? `${colors.onPrimary}1A` : colors.surfaceElevated,
+          borderLeftColor: isUser ? `${colors.onPrimary}66` : colors.border,
           borderLeftWidth: 3,
           paddingLeft: 10,
           paddingVertical: 4,
           marginVertical: 6,
         },
         code_inline: {
-          backgroundColor: isUser ? 'rgba(255,255,255,0.15)' : colors.surfaceElevated,
-          color: isUser ? '#fff' : colors.text,
+          backgroundColor: isUser ? `${colors.onPrimary}26` : colors.surfaceElevated,
+          color: isUser ? colors.onPrimary : colors.text,
           fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
           fontSize: 13,
           paddingHorizontal: 5,
@@ -92,35 +92,35 @@ export default function MarkdownRenderer({ content, isUser }: MarkdownRendererPr
           marginBottom: 8,
         },
         bullet_list_icon: {
-          color: isUser ? '#fff' : colors.textMuted,
+          color: isUser ? colors.onPrimary : colors.textMuted,
           marginRight: 6,
         },
         ordered_list_icon: {
-          color: isUser ? '#fff' : colors.textMuted,
+          color: isUser ? colors.onPrimary : colors.textMuted,
           marginRight: 6,
         },
         hr: {
-          backgroundColor: isUser ? 'rgba(255,255,255,0.2)' : colors.border,
+          backgroundColor: isUser ? `${colors.onPrimary}33` : colors.border,
           height: 1,
           marginVertical: 10,
         },
         table: {
-          borderColor: isUser ? 'rgba(255,255,255,0.2)' : colors.border,
+          borderColor: isUser ? `${colors.onPrimary}33` : colors.border,
         },
         thead: {
-          backgroundColor: isUser ? 'rgba(255,255,255,0.1)' : colors.surfaceElevated,
+          backgroundColor: isUser ? `${colors.onPrimary}1A` : colors.surfaceElevated,
         },
         th: {
-          color: isUser ? '#fff' : colors.text,
+          color: isUser ? colors.onPrimary : colors.text,
           fontWeight: '600' as const,
           padding: 6,
         },
         td: {
-          color: isUser ? '#fff' : colors.text,
+          color: isUser ? colors.onPrimary : colors.text,
           padding: 6,
         },
         tr: {
-          borderBottomColor: isUser ? 'rgba(255,255,255,0.1)' : colors.border,
+          borderBottomColor: isUser ? `${colors.onPrimary}1A` : colors.border,
           borderBottomWidth: StyleSheet.hairlineWidth,
         },
       }),

@@ -71,7 +71,7 @@ export default function SessionDetailScreen() {
             onPress={handleDeleteSession}
             className="mr-4"
           >
-            <Text style={{ color: colors.danger || '#ef4444' }}>Delete</Text>
+            <Text style={{ color: colors.danger }}>Delete</Text>
           </TouchableOpacity>
         ),
       }}

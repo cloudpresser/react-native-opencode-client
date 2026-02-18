@@ -329,7 +329,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     // If no parts, fall back to plain content rendered as markdown
     if (!parts || parts.length === 0) {
       if (isUser) {
-        return <Text className="text-white text-[15px] leading-5">{item.content}</Text>;
+        return <Text className="text-on-primary text-[15px] leading-5">{item.content}</Text>;
       }
       return <MarkdownRenderer content={item.content} />;
     }
@@ -341,7 +341,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             case 'text':
               if (isUser) {
                 return (
-                  <Text key={idx} className="text-white text-[15px] leading-5">
+                  <Text key={idx} className="text-on-primary text-[15px] leading-5">
                     {part.content}
                   </Text>
                 );
@@ -384,8 +384,8 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         {isUser ? (
           <View className="bg-primary p-3 rounded-xl">
             <View className="flex-row justify-between mb-1">
-              <Text className="text-white font-semibold text-xs">You</Text>
-              <Text className="text-white/70 text-[10px]">
+              <Text className="text-on-primary font-semibold text-xs">You</Text>
+              <Text className="text-on-primary/70 text-[10px]">
                 {new Date(item.timestamp).toLocaleTimeString()}
               </Text>
             </View>
@@ -396,8 +396,8 @@ export default function ChatTab({ session, server }: ChatTabProps) {
                     {att.type === 'image' ? (
                       <StyledImage source={{ uri: att.uri }} className="w-48 h-48 rounded-lg" />
                     ) : (
-                      <View className="bg-white/20 p-2 rounded-md">
-                        <Text className="text-xs text-white">{att.name}</Text>
+                      <View className="bg-on-primary/20 p-2 rounded-md">
+                        <Text className="text-xs text-on-primary">{att.name}</Text>
                       </View>
                     )}
                   </View>
@@ -576,9 +576,9 @@ keyExtractor={(item: MessageAttachment) => item.id}
             testID="send-message-btn"
           >
             {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={colors.onPrimary} size="small" />
             ) : (
-              <Text className="text-white font-semibold">Send</Text>
+              <Text className="text-on-primary font-semibold">Send</Text>
             )}
           </TouchableOpacity>
         </View>

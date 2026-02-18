@@ -105,9 +105,9 @@ export default function NewSessionScreen() {
             testID="create-session-button"
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.onPrimary} />
             ) : (
-              <Text className="text-base font-semibold text-white">Create</Text>
+              <Text className="text-base font-semibold text-on-primary">Create</Text>
             )}
           </TouchableOpacity>
         </View>

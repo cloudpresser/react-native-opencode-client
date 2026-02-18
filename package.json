@@ -13,7 +13,8 @@
     "ios": "expo run:ios",
     "preweb": "node scripts/build-theme.js",
     "web": "expo start --web",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "postinstall": "node scripts/build-theme.js"
   },
   "dependencies": {
     "@dylankenneally/react-native-ssh-sftp": "^1.6.2",

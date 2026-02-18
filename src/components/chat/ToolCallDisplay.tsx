@@ -32,7 +32,7 @@ function getToolIcon(toolName: string): string {
 function getStatusColor(state: string, colors: ReturnType<typeof useThemeColors>): string {
   switch (state) {
     case 'result':
-      return '#22c55e'; // green
+      return colors.success;
     case 'call':
     case 'partial-call':
       return colors.primary;
@@ -243,14 +243,14 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
               <ScrollView
                 style={{
                   maxHeight: 300,
-                  backgroundColor: '#282c34',
+                    backgroundColor: colors.codeBackground,
                   borderRadius: 6,
                   padding: 8,
                 }}
               >
                 <Text
                   style={{
-                    color: '#abb2bf',
+                    color: colors.codeText,
                     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
                     fontSize: 11,
                     lineHeight: 16,

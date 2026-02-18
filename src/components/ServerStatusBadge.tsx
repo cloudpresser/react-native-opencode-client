@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   containerMedium: {
     paddingVertical: 4,
     paddingHorizontal: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: 'rgba(128, 128, 128, 0.1)',
     borderRadius: 12,
   },
   dot: {
