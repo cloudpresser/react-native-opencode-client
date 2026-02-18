@@ -1,3 +1,10 @@
+## [2.2.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.2.2...v2.2.3) (2026-02-18)
+
+
+### Bug Fixes
+
+* **ci:** separate stdout/stderr from EAS CLI to fix JSON parsing and pipefail exit code 5 ([382230c](https://github.com/cloudpresser/react-native-opencode-client/commit/382230c463acc5db929759462cfb283b0b204592))
+
 ## [2.2.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.2.1...v2.2.2) (2026-02-18)
 
 
