@@ -9,6 +9,9 @@ appId: com.cloudpresser.opencodeclient
     timeout: 2000
 - assertVisible:
     id: "add-edit-server-screen"
+# Connection status badge should be visible when editing an existing server
+- assertVisible:
+    id: "connection-status-badge"
 - tapOn:
     id: "server-name-input"
 - waitForAnimationToEnd:

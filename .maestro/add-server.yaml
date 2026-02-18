@@ -43,3 +43,9 @@ appId: com.cloudpresser.opencodeclient
       timeout: 2000
 - assertVisible: ".*Test Server.*"
 - assertVisible: ".*OpenCode Servers.*"
+# Server status badge should be visible on the newly added server card
+# The server won't connect in test environment, so status should be "Disconnected"
+- assertVisible:
+    id: "server-status-test-server"
+- assertVisible:
+    text: "Disconnected"
