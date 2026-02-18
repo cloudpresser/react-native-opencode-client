@@ -1,3 +1,10 @@
+## [2.1.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.1...v2.1.2) (2026-02-18)
+
+
+### Bug Fixes
+
+* **ci:** consolidate EAS build steps and capture build error output ([f452a46](https://github.com/cloudpresser/react-native-opencode-client/commit/f452a464dca7e411c0a5521a45ee08a6e34c9331))
+
 ## [2.1.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.0...v2.1.1) (2026-02-18)
 
 
