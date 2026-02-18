@@ -1,3 +1,10 @@
+## [2.4.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.4.0...v2.4.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* exclude duplicate OSGI manifest via expo-build-properties plugin ([59d19ac](https://github.com/cloudpresser/react-native-opencode-client/commit/59d19acb90dafd85052d07a549325f304a9e5b57))
+
 # [2.4.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.3.1...v2.4.0) (2026-02-18)
 
 
