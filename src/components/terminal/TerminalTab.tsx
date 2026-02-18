@@ -5,11 +5,11 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  StyleSheet,
   ActivityIndicator,
 } from 'react-native';
 import { Server, Session } from '../../types';
 import { OpenCodeService } from '../../services/opencode';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 interface TerminalTabProps {
   session: Session;
@@ -23,6 +23,7 @@ interface TerminalLine {
 }
 
 export default function TerminalTab({ session, server }: TerminalTabProps) {
+  const colors = useThemeColors();
   const [command, setCommand] = useState('');
   const [lines, setLines] = useState<TerminalLine[]>([
     {
@@ -53,11 +54,9 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     const commandText = command;
     setCommand('');
 
-    // Add command to history
     setCommandHistory([...commandHistory, commandText]);
     setHistoryIndex(-1);
 
-    // Add command line
     const commandLine: TerminalLine = {
       id: Date.now().toString(),
       type: 'command',
@@ -121,212 +120,80 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     ]);
   };
 
-  const renderLine = (line: TerminalLine) => {
-    let lineStyle = styles.outputLine;
-
-    if (line.type === 'command') {
-      lineStyle = styles.commandLine;
-    } else if (line.type === 'error') {
-      lineStyle = styles.errorLine;
-    }
+  const renderLine = (line: TerminalLine): React.ReactElement => {
+    const lineClass = line.type === 'command' 
+      ? 'text-success font-bold' 
+      : line.type === 'error' 
+        ? 'text-danger' 
+        : 'text-text';
 
     return (
-      <Text key={line.id} style={[styles.line, lineStyle]}>
+      <Text key={line.id} className={`font-mono text-[13px] leading-5 mb-1 ${lineClass}`}>
         {line.content}
       </Text>
     );
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Terminal</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity style={styles.historyButton} onPress={handleHistoryUp}>
-            <Text style={styles.historyButtonText}>↑</Text>
+    <View className="flex-1 bg-surface-elevated">
+      <View className="flex-row justify-between items-center p-4 bg-surface border-b border-border">
+        <Text className="text-xl font-bold text-text">Terminal</Text>
+        <View className="flex-row gap-2">
+          <TouchableOpacity className="bg-border-muted px-3 py-1.5 rounded-md min-w-[36] items-center" onPress={handleHistoryUp}>
+            <Text className="text-text text-base font-bold">↑</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.historyButton} onPress={handleHistoryDown}>
-            <Text style={styles.historyButtonText}>↓</Text>
+          <TouchableOpacity className="bg-border-muted px-3 py-1.5 rounded-md min-w-[36] items-center" onPress={handleHistoryDown}>
+            <Text className="text-text text-base font-bold">↓</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.clearButton} onPress={clearTerminal}>
-            <Text style={styles.clearButtonText}>Clear</Text>
+          <TouchableOpacity className="bg-danger px-3 py-1.5 rounded-md" onPress={clearTerminal}>
+            <Text className="text-white font-semibold">Clear</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
         ref={scrollViewRef}
-        style={styles.terminalContainer}
-        contentContainerStyle={styles.terminalContent}
+        className="flex-1"
+        contentContainerClassName="p-3"
       >
         {lines.map(renderLine)}
         {executing && (
-          <View style={styles.executingContainer}>
-            <ActivityIndicator size="small" color="#4ec9b0" />
-            <Text style={styles.executingText}>Executing...</Text>
+          <View className="flex-row items-center gap-2 mt-2">
+            <ActivityIndicator size="small" color={colors.success} />
+            <Text className="text-success text-[13px] font-mono">Executing...</Text>
           </View>
         )}
       </ScrollView>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.prompt}>$</Text>
+      <View className="flex-row items-center p-3 bg-surface border-t border-border">
+        <Text className="text-success text-base font-bold mr-2 font-mono">$</Text>
         <TextInput
-          style={styles.input}
+          className="flex-1 text-text text-sm font-mono p-2 bg-surface-elevated rounded border border-border"
           value={command}
           onChangeText={setCommand}
           placeholder="Enter command..."
-          placeholderTextColor="#666"
+          placeholderTextColor={colors.textSubtle}
           onSubmitEditing={executeCommand}
           editable={!executing}
           autoCapitalize="none"
           autoCorrect={false}
+          testID="terminal-input"
         />
         <TouchableOpacity
-          style={[styles.executeButton, executing && styles.executeButtonDisabled]}
+          className={`px-4 py-2 rounded-md ml-2 ${executing ? 'bg-border-muted' : 'bg-primary'}`}
           onPress={executeCommand}
           disabled={executing}
+          testID="terminal-send-btn"
         >
-          <Text style={styles.executeButtonText}>Run</Text>
+          <Text className="text-white font-semibold">Run</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.infoBar}>
-        <Text style={styles.infoText}>
+      <View className="p-2 bg-surface border-t border-border">
+        <Text className="text-text-subtle text-[11px] text-center">
           Tip: Use ↑ ↓ buttons to navigate command history
         </Text>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1e1e1e',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#2d2d2d',
-    borderBottomWidth: 1,
-    borderBottomColor: '#3d3d3d',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  historyButton: {
-    backgroundColor: '#3d3d3d',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    minWidth: 36,
-    alignItems: 'center',
-  },
-  historyButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  clearButton: {
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  clearButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  terminalContainer: {
-    flex: 1,
-  },
-  terminalContent: {
-    padding: 12,
-  },
-  line: {
-    fontFamily: 'monospace',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  commandLine: {
-    color: '#4ec9b0',
-    fontWeight: 'bold',
-  },
-  outputLine: {
-    color: '#d4d4d4',
-  },
-  errorLine: {
-    color: '#f48771',
-  },
-  executingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  executingText: {
-    color: '#4ec9b0',
-    fontSize: 13,
-    fontFamily: 'monospace',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#2d2d2d',
-    borderTopWidth: 1,
-    borderTopColor: '#3d3d3d',
-  },
-  prompt: {
-    color: '#4ec9b0',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginRight: 8,
-    fontFamily: 'monospace',
-  },
-  input: {
-    flex: 1,
-    color: '#d4d4d4',
-    fontSize: 14,
-    fontFamily: 'monospace',
-    padding: 8,
-    backgroundColor: '#1e1e1e',
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#3d3d3d',
-  },
-  executeButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-  executeButtonDisabled: {
-    backgroundColor: '#555',
-  },
-  executeButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  infoBar: {
-    padding: 8,
-    backgroundColor: '#2d2d2d',
-    borderTopWidth: 1,
-    borderTopColor: '#3d3d3d',
-  },
-  infoText: {
-    color: '#858585',
-    fontSize: 11,
-    textAlign: 'center',
-  },
-});

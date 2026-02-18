@@ -5,17 +5,21 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   Image,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
 import { ChatMessage, MessageAttachment, Server, Session } from '../../types';
 import { OpenCodeService } from '../../services/opencode';
+import { useThemeColors } from '../../hooks/useThemeColors';
+
+const StyledImage = withUniwind(Image);
+const StyledActivityIndicator = withUniwind(ActivityIndicator);
 
 interface ChatTabProps {
   session: Session;
@@ -23,6 +27,7 @@ interface ChatTabProps {
 }
 
 export default function ChatTab({ session, server }: ChatTabProps) {
+  const colors = useThemeColors();
   const { messages, addMessage, loadMessages } = useStore();
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -184,30 +189,29 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     }
   };
 
-  const renderMessage = ({ item }: { item: ChatMessage }) => (
+  const renderMessage = ({ item }: { item: ChatMessage }): React.ReactElement => (
     <View
-      style={[
-        styles.messageContainer,
-        item.role === 'user' ? styles.userMessage : styles.assistantMessage,
-      ]}
+      className={`p-3 rounded-xl mb-3 max-w-[80%] ${item.role === 'user' ? 'bg-primary self-end' : 'bg-surface self-start border border-border'}`}
       testID={`message-${item.role}-${item.id}`}
     >
-      <View style={styles.messageHeader}>
-        <Text style={styles.messageRole}>{item.role === 'user' ? 'You' : 'Assistant'}</Text>
-        <Text style={styles.messageTime}>
+      <View className="flex-row justify-between mb-1">
+        <Text className={item.role === 'user' ? 'text-white font-semibold text-xs' : 'text-text-muted font-semibold text-xs'}>
+          {item.role === 'user' ? 'You' : 'Assistant'}
+        </Text>
+        <Text className={item.role === 'user' ? 'text-white/70 text-[10px]' : 'text-text-subtle text-[10px]'}>
           {new Date(item.timestamp).toLocaleTimeString()}
         </Text>
       </View>
       
       {item.attachments && item.attachments.length > 0 && (
-        <View style={styles.attachmentsPreview}>
+        <View className="mb-2">
           {item.attachments.map((att) => (
-            <View key={att.id} style={styles.attachmentItem}>
+            <View key={att.id} className="mb-2">
               {att.type === 'image' ? (
-                <Image source={{ uri: att.uri }} style={styles.attachmentImage} />
+                <StyledImage source={{ uri: att.uri }} className="w-48 h-48 rounded-lg" />
               ) : (
-                <View style={styles.fileAttachment}>
-                  <Text style={styles.fileName}>{att.name}</Text>
+                <View className="bg-border-muted p-2 rounded-md">
+                  <Text className="text-xs text-text">{att.name}</Text>
                 </View>
               )}
             </View>
@@ -215,46 +219,46 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         </View>
       )}
       
-      <Text style={styles.messageContent}>{item.content}</Text>
+      <Text className={item.role === 'user' ? 'text-white text-[15px] leading-5' : 'text-text text-[15px] leading-5'}>
+        {item.content}
+      </Text>
     </View>
   );
 
-  const renderAttachment = ({ item }: { item: MessageAttachment }) => (
-    <View style={styles.attachmentChip}>
+  const renderAttachment = ({ item }: { item: MessageAttachment }): React.ReactElement => (
+    <View className="flex-row items-center bg-border-muted rounded-full px-3 py-1.5 mr-2 max-w-[150px]">
       {item.type === 'image' ? (
-        <Image source={{ uri: item.uri }} style={styles.attachmentThumb} />
+        <StyledImage source={{ uri: item.uri }} className="w-6 h-6 rounded mr-1.5" />
       ) : (
-        <Text style={styles.attachmentName} numberOfLines={1}>
-          {item.name}
-        </Text>
+        <Text className="text-xs text-text flex-1" numberOfLines={1}>{item.name}</Text>
       )}
       <TouchableOpacity onPress={() => removeAttachment(item.id)}>
-        <Text style={styles.removeAttachment}>×</Text>
+        <Text className="text-lg text-danger ml-1.5">×</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={styles.container} testID="chat-tab">
+    <View className="flex-1 bg-background" testID="chat-tab">
       <FlatList
         ref={flatListRef}
         data={sessionMessages}
         renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messagesContainer}
+        keyExtractor={(item: ChatMessage) => item.id}
+        contentContainerClassName="p-4"
         testID="messages-list"
         ListEmptyComponent={
-          <View style={styles.emptyContainer} testID="empty-messages">
-            <Text style={styles.emptyText}>No messages yet</Text>
-            <Text style={styles.emptySubtext}>Start a conversation with OpenCode</Text>
+          <View className="items-center justify-center pt-16" testID="empty-messages">
+            <Text className="text-lg font-semibold text-text-muted mb-2">No messages yet</Text>
+            <Text className="text-sm text-text-subtle">Start a conversation with OpenCode</Text>
           </View>
         }
         ListFooterComponent={
           streamingText ? (
-            <View style={[styles.messageContainer, styles.assistantMessage]} testID="streaming-message">
-              <Text style={styles.messageRole}>Assistant</Text>
-              <Text style={styles.messageContent}>{streamingText}</Text>
-              <ActivityIndicator style={styles.streamingIndicator} />
+            <View className="bg-surface self-start p-3 rounded-xl border border-border max-w-[80%]" testID="streaming-message">
+              <Text className="text-text-muted font-semibold text-xs mb-1">Assistant</Text>
+              <Text className="text-text text-[15px] leading-5">{streamingText}</Text>
+              <StyledActivityIndicator className="mt-2" />
             </View>
           ) : null
         }
@@ -265,210 +269,54 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           horizontal
           data={attachments}
           renderItem={renderAttachment}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.attachmentsBar}
+keyExtractor={(item: MessageAttachment) => item.id}
+          contentContainerClassName="px-4 py-2 bg-surface border-t border-border"
           testID="attachments-list"
         />
       )}
 
-      <View style={styles.inputContainer}>
+      <View className="flex-row items-end p-3 bg-surface border-t border-border">
         <TouchableOpacity 
-          style={styles.attachButton} 
+          className="p-2 mr-1"
           onPress={handlePickFile}
           testID="attach-file-button"
         >
-          <Text style={styles.attachButtonText}>📎</Text>
+          <Text className="text-xl">📎</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
-          style={styles.attachButton} 
+          className="p-2 mr-1"
           onPress={handlePickImage}
           testID="attach-image-button"
         >
-          <Text style={styles.attachButtonText}>🖼️</Text>
+          <Text className="text-xl">🖼️</Text>
         </TouchableOpacity>
 
         <TextInput
-          style={styles.input}
+          className="flex-1 border border-border rounded-full px-4 py-2 text-base max-h-24 mr-2 text-text"
           placeholder="Type a message..."
+          placeholderTextColor={colors.textSubtle}
           value={input}
           onChangeText={setInput}
           multiline
           maxLength={10000}
           editable={!loading}
-          testID="message-input"
+          testID="chat-input"
         />
 
         <TouchableOpacity
-          style={[styles.sendButton, loading && styles.sendButtonDisabled]}
+          className={`rounded-full px-5 py-2.5 justify-center items-center ${loading ? 'bg-border-muted' : 'bg-primary'}`}
           onPress={handleSend}
           disabled={loading}
-          testID="send-message-button"
+          testID="send-message-btn"
         >
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={styles.sendButtonText}>Send</Text>
+            <Text className="text-white font-semibold">Send</Text>
           )}
         </TouchableOpacity>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  messagesContainer: {
-    padding: 16,
-  },
-  messageContainer: {
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 12,
-    maxWidth: '80%',
-  },
-  userMessage: {
-    backgroundColor: '#007AFF',
-    alignSelf: 'flex-end',
-  },
-  assistantMessage: {
-    backgroundColor: '#fff',
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  messageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  messageRole: {
-    fontWeight: '600',
-    fontSize: 12,
-    color: '#666',
-  },
-  messageTime: {
-    fontSize: 10,
-    color: '#999',
-  },
-  messageContent: {
-    fontSize: 15,
-    lineHeight: 20,
-    color: '#333',
-  },
-  attachmentsPreview: {
-    marginBottom: 8,
-  },
-  attachmentItem: {
-    marginBottom: 8,
-  },
-  attachmentImage: {
-    width: 200,
-    height: 200,
-    borderRadius: 8,
-  },
-  fileAttachment: {
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    borderRadius: 6,
-  },
-  fileName: {
-    fontSize: 12,
-    color: '#333',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-  },
-  streamingIndicator: {
-    marginTop: 8,
-  },
-  attachmentsBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  attachmentChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    maxWidth: 150,
-  },
-  attachmentThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  attachmentName: {
-    fontSize: 12,
-    color: '#333',
-    flex: 1,
-  },
-  removeAttachment: {
-    fontSize: 20,
-    color: '#FF3B30',
-    marginLeft: 6,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  attachButton: {
-    padding: 8,
-    marginRight: 4,
-  },
-  attachButtonText: {
-    fontSize: 20,
-  },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    fontSize: 16,
-    maxHeight: 100,
-    marginRight: 8,
-  },
-  sendButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-});

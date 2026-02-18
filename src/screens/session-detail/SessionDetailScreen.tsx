@@ -1,8 +1,11 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, Alert } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
+import { useThemeColors } from '../../hooks/useThemeColors';
+import { useStore } from '../../store';
 import ChatTab from '../../components/chat/ChatTab';
 import GitViewerTab from '../../components/git-viewer/GitViewerTab';
 import TerminalTab from '../../components/terminal/TerminalTab';
@@ -15,22 +18,61 @@ const Tab = createBottomTabNavigator();
 export default function SessionDetailScreen() {
   const route = useRoute<SessionDetailRouteProp>();
   const { session, server } = route.params;
+  const colors = useThemeColors();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { deleteSession } = useStore();
+
+  const handleDeleteSession = () => {
+    Alert.alert(
+      'Delete Session',
+      `Are you sure you want to delete "${session.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteSession(session.id);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#666',
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          height: 60,
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
         headerShown: true,
         headerTitle: session.title,
+        headerStyle: {
+          backgroundColor: colors.surface,
+        },
+        headerTintColor: colors.text,
+        headerRight: () => (
+          <TouchableOpacity
+            testID="session-delete-btn"
+            onPress={handleDeleteSession}
+            className="mr-4"
+          >
+            <Text style={{ color: colors.error || '#ef4444' }}>Delete</Text>
+          </TouchableOpacity>
+        ),
       }}
     >
       <Tab.Screen
         name="Chat"
         options={{
           tabBarLabel: 'Chat',
-          tabBarIcon: ({ color }) => <View style={[styles.icon, { backgroundColor: color }]} />,
+          tabBarIcon: ({ color }) => <View className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />,
         }}
       >
         {() => <ChatTab session={session} server={server} />}
@@ -40,7 +82,7 @@ export default function SessionDetailScreen() {
         name="GitViewer"
         options={{
           tabBarLabel: 'Git',
-          tabBarIcon: ({ color }) => <View style={[styles.icon, { backgroundColor: color }]} />,
+          tabBarIcon: ({ color }) => <View className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />,
         }}
       >
         {() => <GitViewerTab session={session} server={server} />}
@@ -50,7 +92,7 @@ export default function SessionDetailScreen() {
         name="Terminal"
         options={{
           tabBarLabel: 'Terminal',
-          tabBarIcon: ({ color }) => <View style={[styles.icon, { backgroundColor: color }]} />,
+          tabBarIcon: ({ color }) => <View className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />,
         }}
       >
         {() => <TerminalTab session={session} server={server} />}
@@ -60,7 +102,7 @@ export default function SessionDetailScreen() {
         name="FileAnnotation"
         options={{
           tabBarLabel: 'Annotate',
-          tabBarIcon: ({ color }) => <View style={[styles.icon, { backgroundColor: color }]} />,
+          tabBarIcon: ({ color }) => <View className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />,
         }}
       >
         {() => <FileAnnotationTab session={session} server={server} />}
@@ -68,17 +110,3 @@ export default function SessionDetailScreen() {
     </Tab.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    height: 60,
-  },
-  icon: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-});
