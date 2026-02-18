@@ -1,3 +1,5 @@
+export type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
+
 export interface Server {
   id: string;
   name: string;
@@ -51,7 +53,9 @@ export interface FileAnnotation {
 }
 
 export interface TerminalState {
-  sessionId: string;
-  connected: boolean;
   history: string[];
+  currentInput: string;
+  isProcessing: boolean;
 }
+
+

@@ -2,7 +2,7 @@ import { Server, Session, GitFile } from '../types';
 import EventSource from 'react-native-sse';
 import base64 from 'base-64';
 
-interface MessagePart {
+export interface MessagePart {
   type: 'text' | 'image' | 'file';
   text?: string;
   image?: string;
@@ -10,7 +10,7 @@ interface MessagePart {
   mimeType?: string;
 }
 
-interface Message {
+export interface Message {
   info: {
     id: string;
     sessionID: string;
@@ -281,11 +281,14 @@ export class OpenCodeService {
     }
   }
 
-  async getMessages(sessionId: string, limit?: number): Promise<Message[]> {
+  async getMessages(sessionId: string, limit?: number, before?: string): Promise<Message[]> {
     try {
-      const url = limit 
-        ? `${this.baseUrl}/session/${sessionId}/message?limit=${limit}`
-        : `${this.baseUrl}/session/${sessionId}/message`;
+      const params = new URLSearchParams();
+      if (limit) params.append('limit', limit.toString());
+      if (before) params.append('before', before);
+      
+      const queryString = params.toString();
+      const url = `${this.baseUrl}/session/${sessionId}/message${queryString ? `?${queryString}` : ''}`;
       
       const response = await fetch(url, {
         headers: this.getHeaders(),

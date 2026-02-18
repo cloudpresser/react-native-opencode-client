@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
@@ -15,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
 import { ChatMessage, MessageAttachment, Server, Session } from '../../types';
-import { OpenCodeService } from '../../services/opencode';
+import { OpenCodeService, Message as ApiMessage } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
 
 const StyledImage = withUniwind(Image);
@@ -26,29 +27,111 @@ interface ChatTabProps {
   server: Server;
 }
 
+const INITIAL_LOAD_LIMIT = 10;
+const PAGINATION_LIMIT = 10;
+
+function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
+  const textParts = apiMsg.parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text' && !!p.text);
+  const content = textParts.map(p => p.text).join('\n');
+  
+  const attachments: MessageAttachment[] = [];
+  for (const part of apiMsg.parts) {
+    if (part.type === 'image' && part.image) {
+      attachments.push({
+        id: `${apiMsg.info.id}-img-${attachments.length}`,
+        type: 'image',
+        uri: part.image.startsWith('data:') ? part.image : `data:image/png;base64,${part.image}`,
+        name: `image_${attachments.length}.png`,
+        mimeType: 'image/png',
+      });
+    } else if (part.type === 'file' && part.data) {
+      attachments.push({
+        id: `${apiMsg.info.id}-file-${attachments.length}`,
+        type: 'file',
+        uri: part.data,
+        name: `file_${attachments.length}`,
+        mimeType: part.mimeType || 'application/octet-stream',
+      });
+    }
+  }
+
+  return {
+    id: apiMsg.info.id,
+    role: apiMsg.info.role,
+    content,
+    timestamp: apiMsg.info.createdAt,
+    attachments: attachments.length > 0 ? attachments : undefined,
+  };
+}
+
 export default function ChatTab({ session, server }: ChatTabProps) {
   const colors = useThemeColors();
-  const { messages, addMessage, loadMessages } = useStore();
+  const { messages, hasMoreMessages, addMessage, setMessages, prependMessages, setHasMoreMessages } = useStore();
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [streamingText, setStreamingText] = useState('');
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
   const sessionMessages = messages[session.id] || [];
+  const canLoadMore = hasMoreMessages[session.id] ?? true;
+
+  const loadInitialMessages = useCallback(async () => {
+    try {
+      setInitialLoading(true);
+      const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+      const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+      setMessages(session.id, chatMessages);
+      setHasMoreMessages(session.id, apiMessages.length === INITIAL_LOAD_LIMIT);
+    } catch (error) {
+      console.error('Error loading initial messages:', error);
+      Alert.alert('Error', 'Failed to load messages from server');
+    } finally {
+      setInitialLoading(false);
+    }
+  }, [session.id, service, setMessages, setHasMoreMessages]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingMore || !canLoadMore || sessionMessages.length === 0) return;
+
+    try {
+      setLoadingMore(true);
+      const oldestMessage = sessionMessages[0];
+      const apiMessages = await service.getMessages(
+        session.id,
+        PAGINATION_LIMIT,
+        oldestMessage.timestamp
+      );
+      
+      if (apiMessages.length > 0) {
+        const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+        prependMessages(session.id, chatMessages);
+        setHasMoreMessages(session.id, apiMessages.length === PAGINATION_LIMIT);
+      } else {
+        setHasMoreMessages(session.id, false);
+      }
+    } catch (error) {
+      console.error('Error loading older messages:', error);
+      Alert.alert('Error', 'Failed to load older messages');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, canLoadMore, sessionMessages, session.id, service, prependMessages, setHasMoreMessages]);
 
   useEffect(() => {
-    loadMessages(session.id);
-  }, [session.id]);
+    loadInitialMessages();
+  }, [loadInitialMessages]);
 
   useEffect(() => {
-    if (sessionMessages.length > 0) {
+    if (sessionMessages.length > 0 && !initialLoading && !loadingMore) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
-  }, [sessionMessages.length]);
+  }, [sessionMessages.length, initialLoading, loadingMore]);
 
   const handlePickFile = async () => {
     try {
@@ -238,6 +321,34 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     </View>
   );
 
+  const renderLoadMoreHeader = () => {
+    if (!canLoadMore || sessionMessages.length === 0) return null;
+    
+    return (
+      <TouchableOpacity 
+        onPress={loadOlderMessages}
+        disabled={loadingMore}
+        className="items-center py-3 mb-2"
+        testID="load-more-button"
+      >
+        {loadingMore ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <Text className="text-primary text-sm font-medium">Load older messages</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  if (initialLoading) {
+    return (
+      <View className="flex-1 bg-background items-center justify-center" testID="chat-tab">
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text className="text-text-muted mt-3">Loading messages...</Text>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-background" testID="chat-tab">
       <FlatList
@@ -247,6 +358,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         keyExtractor={(item: ChatMessage) => item.id}
         contentContainerClassName="p-4"
         testID="messages-list"
+        ListHeaderComponent={renderLoadMoreHeader}
         ListEmptyComponent={
           <View className="items-center justify-center pt-16" testID="empty-messages">
             <Text className="text-lg font-semibold text-text-muted mb-2">No messages yet</Text>
@@ -261,6 +373,15 @@ export default function ChatTab({ session, server }: ChatTabProps) {
               <StyledActivityIndicator className="mt-2" />
             </View>
           ) : null
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={loadingMore}
+            onRefresh={loadOlderMessages}
+            tintColor={colors.primary}
+            title={canLoadMore ? "Pull to load older messages" : "No older messages"}
+            titleColor={colors.textMuted}
+          />
         }
       />
 

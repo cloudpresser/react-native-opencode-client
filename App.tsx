@@ -15,6 +15,7 @@ import NewSessionScreen from './src/screens/sessions/NewSessionScreen';
 import GitDiffViewerScreen from './src/screens/git/GitDiffViewerScreen';
 import { RootStackParamList } from './src/navigation/types';
 import { useStore } from './src/store';
+import { ServerStatusProvider } from './src/context/ServerStatusContext';
 import './src/global.css';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -39,24 +40,26 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StyledView className="flex-1 bg-background">
-        <NavigationContainer theme={navigationTheme}>
-          <StatusBar style={systemColorScheme === 'dark' ? 'light' : 'dark'} />
-          <Stack.Navigator
-            initialRouteName="Servers"
-            screenOptions={{
-              headerShown: false,
-            }}
-          >
-            <Stack.Screen name="Servers" component={ServersScreen} />
-            <Stack.Screen name="Sessions" component={SessionsScreen} />
-            <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
-            <Stack.Screen name="AddEditServer" component={AddEditServerScreen} />
-            <Stack.Screen name="NewSession" component={NewSessionScreen} />
-            <Stack.Screen name="GitDiffViewer" component={GitDiffViewerScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </StyledView>
+      <ServerStatusProvider>
+        <StyledView className="flex-1 bg-background">
+          <NavigationContainer theme={navigationTheme}>
+            <StatusBar style={systemColorScheme === 'dark' ? 'light' : 'dark'} />
+            <Stack.Navigator
+              initialRouteName="Servers"
+              screenOptions={{
+                headerShown: false,
+              }}
+            >
+              <Stack.Screen name="Servers" component={ServersScreen} />
+              <Stack.Screen name="Sessions" component={SessionsScreen} />
+              <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
+              <Stack.Screen name="AddEditServer" component={AddEditServerScreen} />
+              <Stack.Screen name="NewSession" component={NewSessionScreen} />
+              <Stack.Screen name="GitDiffViewer" component={GitDiffViewerScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </StyledView>
+      </ServerStatusProvider>
     </SafeAreaProvider>
   );
 }

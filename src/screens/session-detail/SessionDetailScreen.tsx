@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, Alert } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
+import { useRoute, RouteProp, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useThemeColors } from '../../hooks/useThemeColors';
@@ -20,7 +20,15 @@ export default function SessionDetailScreen() {
   const { session, server } = route.params;
   const colors = useThemeColors();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { deleteSession } = useStore();
+  const { deleteSession, clearMessages } = useStore();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        clearMessages(session.id);
+      };
+    }, [session.id, clearMessages])
+  );
 
   const handleDeleteSession = () => {
     Alert.alert(
@@ -63,7 +71,7 @@ export default function SessionDetailScreen() {
             onPress={handleDeleteSession}
             className="mr-4"
           >
-            <Text style={{ color: colors.error || '#ef4444' }}>Delete</Text>
+            <Text style={{ color: colors.danger || '#ef4444' }}>Delete</Text>
           </TouchableOpacity>
         ),
       }}

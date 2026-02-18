@@ -30,8 +30,11 @@ interface AppState {
 
   // Chat
   messages: Record<string, ChatMessage[]>;
+  hasMoreMessages: Record<string, boolean>;
   addMessage: (sessionId: string, message: ChatMessage) => void;
-  loadMessages: (sessionId: string) => Promise<void>;
+  setMessages: (sessionId: string, messages: ChatMessage[]) => void;
+  prependMessages: (sessionId: string, messages: ChatMessage[]) => void;
+  setHasMoreMessages: (sessionId: string, hasMore: boolean) => void;
   clearMessages: (sessionId: string) => void;
 
   // Git Files
@@ -145,28 +148,37 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Chat
   messages: {},
+  hasMoreMessages: {},
   
   addMessage: (sessionId: string, message: ChatMessage) => {
     const messages = get().messages;
     const sessionMessages = messages[sessionId] || [];
     const updated = { ...messages, [sessionId]: [...sessionMessages, message] };
     set({ messages: updated });
-    AsyncStorage.setItem(`${MESSAGES_KEY}_${sessionId}`, JSON.stringify(updated[sessionId]));
   },
   
-  loadMessages: async (sessionId: string) => {
-    const data = await AsyncStorage.getItem(`${MESSAGES_KEY}_${sessionId}`);
-    if (data) {
-      const messages = get().messages;
-      set({ messages: { ...messages, [sessionId]: JSON.parse(data) } });
-    }
+  setMessages: (sessionId: string, newMessages: ChatMessage[]) => {
+    const messages = get().messages;
+    set({ messages: { ...messages, [sessionId]: newMessages } });
+  },
+  
+  prependMessages: (sessionId: string, olderMessages: ChatMessage[]) => {
+    const messages = get().messages;
+    const sessionMessages = messages[sessionId] || [];
+    set({ messages: { ...messages, [sessionId]: [...olderMessages, ...sessionMessages] } });
+  },
+  
+  setHasMoreMessages: (sessionId: string, hasMore: boolean) => {
+    const hasMoreMessages = get().hasMoreMessages;
+    set({ hasMoreMessages: { ...hasMoreMessages, [sessionId]: hasMore } });
   },
   
   clearMessages: (sessionId: string) => {
     const messages = { ...get().messages };
+    const hasMoreMessages = { ...get().hasMoreMessages };
     delete messages[sessionId];
-    set({ messages });
-    AsyncStorage.removeItem(`${MESSAGES_KEY}_${sessionId}`);
+    delete hasMoreMessages[sessionId];
+    set({ messages, hasMoreMessages });
   },
 
   // Git Files
