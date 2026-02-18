@@ -7,6 +7,9 @@ export interface MessagePart {
   text?: string;
   image?: string;
   data?: string;
+  url?: string;
+  filename?: string;
+  mime?: string;
   mimeType?: string;
 }
 
@@ -15,9 +18,24 @@ export interface Message {
     id: string;
     sessionID: string;
     role: 'user' | 'assistant';
-    createdAt: string;
+    time: {
+      created: number;
+      completed?: number;
+    };
   };
   parts: MessagePart[];
+}
+
+// Raw API session shape (different from our local Session type)
+interface ApiSession {
+  id: string;
+  title: string;
+  time: {
+    created: number;
+    updated: number;
+  };
+  version?: string;
+  parentID?: string;
 }
 
 interface FileDiff {
@@ -44,7 +62,20 @@ export class OpenCodeService {
         headers: this.getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch sessions');
-      return response.json();
+      const data: ApiSession[] = await response.json();
+      // Map API session format (time.created/updated as Unix timestamps)
+      // to our local Session format (createdAt/updatedAt as ISO strings)
+      return data.map(apiSession => ({
+        id: apiSession.id,
+        serverId: '', // Will be set by the caller
+        title: apiSession.title,
+        createdAt: apiSession.time?.created
+          ? new Date(apiSession.time.created * 1000).toISOString()
+          : new Date().toISOString(),
+        updatedAt: apiSession.time?.updated
+          ? new Date(apiSession.time.updated * 1000).toISOString()
+          : undefined,
+      }));
     } catch (error) {
       console.error('Error fetching sessions:', error);
       return [];

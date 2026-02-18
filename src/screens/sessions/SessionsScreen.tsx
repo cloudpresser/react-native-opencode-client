@@ -83,7 +83,7 @@ export default function SessionsScreen() {
     navigation.navigate('SessionDetail', { session, server });
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | undefined) => {
     if (!dateString) return 'Unknown';
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return 'Unknown';
@@ -100,7 +100,7 @@ export default function SessionsScreen() {
       <View className="flex-1">
         <Text className="text-lg font-semibold text-text mb-1">{item.title}</Text>
         <Text className="text-xs text-text-muted mt-1">Created: {formatDate(item.createdAt)}</Text>
-        {item.updatedAt !== item.createdAt && (
+        {item.updatedAt && item.updatedAt !== item.createdAt && (
           <Text className="text-xs text-text-muted mt-1">Updated: {formatDate(item.updatedAt)}</Text>
         )}
       </View>

@@ -14,7 +14,7 @@ export interface Session {
   serverId: string;
   title: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface ChatMessage {

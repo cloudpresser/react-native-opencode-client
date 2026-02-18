@@ -59,7 +59,9 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
     id: apiMsg.info.id,
     role: apiMsg.info.role,
     content,
-    timestamp: apiMsg.info.createdAt,
+    timestamp: apiMsg.info.time?.created
+      ? new Date(apiMsg.info.time.created * 1000).toISOString()
+      : new Date().toISOString(),
     attachments: attachments.length > 0 ? attachments : undefined,
   };
 }
