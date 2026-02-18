@@ -6,6 +6,7 @@ export interface SSHConfig {
   host: string;
   port: number;
   username: string;
+  password?: string;
   privateKey?: string;
   passphrase?: string;
 }
@@ -19,6 +20,7 @@ export interface Server {
   apiKey?: string;
   sshPort?: number;
   sshUsername?: string;
+  sshPassword?: string;
   sshPrivateKey?: string;
   sshPassphrase?: string;
 }

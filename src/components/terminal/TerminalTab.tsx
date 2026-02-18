@@ -1,199 +1,149 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
-import { Server, Session } from '../../types';
-import { OpenCodeService } from '../../services/opencode';
-import { useThemeColors } from '../../hooks/useThemeColors';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { View, KeyboardAvoidingView, Platform } from 'react-native';
+import { Server, Session, SSHConfig, SSHConnectionStatus } from '../../types';
+import { SSHService } from '../../services/ssh';
+import SSHStatusLine from './SSHStatusLine';
+import SSHSettingsPanel from './SSHSettingsPanel';
+import TerminalEmulator, { TerminalLine } from './TerminalEmulator';
 
 interface TerminalTabProps {
   session: Session;
   server: Server;
 }
 
-interface TerminalLine {
-  id: string;
-  type: 'command' | 'output' | 'error';
-  content: string;
-}
-
 export default function TerminalTab({ session, server }: TerminalTabProps) {
-  const colors = useThemeColors();
-  const [command, setCommand] = useState('');
-  const [lines, setLines] = useState<TerminalLine[]>([
-    {
-      id: '0',
-      type: 'output',
-      content: 'OpenCode Terminal - Type commands to execute on the remote session',
-    },
-  ]);
-  const [executing, setExecuting] = useState(false);
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [service] = useState(() => new OpenCodeService(server));
+  const sshRef = useRef<SSHService | null>(null);
 
+  const [sshStatus, setSSHStatus] = useState<SSHConnectionStatus>('disconnected');
+  const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [lines, setLines] = useState<TerminalLine[]>([]);
+  const [sshConfig, setSSHConfig] = useState<SSHConfig>({
+    host: server.host === 'localhost' ? '127.0.0.1' : server.host,
+    port: server.sshPort ?? 22,
+    username: server.sshUsername ?? '',
+    password: server.sshPassword ?? '',
+    privateKey: server.sshPrivateKey ?? '',
+    passphrase: server.sshPassphrase ?? '',
+  });
+
+  // Clean up SSH on unmount
   useEffect(() => {
-    scrollToBottom();
-  }, [lines]);
+    return () => {
+      sshRef.current?.disconnect();
+    };
+  }, []);
 
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
+  const addLine = useCallback((type: TerminalLine['type'], content: string) => {
+    setLines((prev) => [
+      ...prev,
+      { id: Date.now().toString() + Math.random(), type, content },
+    ]);
+  }, []);
 
-  const executeCommand = async () => {
-    if (!command.trim() || executing) return;
+  const handleConnect = useCallback(async () => {
+    if (!sshConfig.username) {
+      setErrorMessage('Username is required');
+      setSSHStatus('error');
+      return;
+    }
 
-    const commandText = command;
-    setCommand('');
+    // Disconnect existing session if any
+    if (sshRef.current) {
+      sshRef.current.disconnect();
+      sshRef.current = null;
+    }
 
-    setCommandHistory([...commandHistory, commandText]);
-    setHistoryIndex(-1);
+    const ssh = new SSHService();
+    sshRef.current = ssh;
 
-    const commandLine: TerminalLine = {
-      id: Date.now().toString(),
-      type: 'command',
-      content: `$ ${commandText}`,
+    // Wire up callbacks
+    ssh.onStatus = (status) => {
+      setSSHStatus(status);
+      if (status === 'connected') {
+        setErrorMessage(undefined);
+      }
     };
 
-    setLines((prev) => [...prev, commandLine]);
-    setExecuting(true);
+    ssh.onData = (data) => {
+      addLine('output', data);
+    };
+
+    ssh.onError = (error) => {
+      addLine('error', error);
+      setErrorMessage(error);
+    };
+
+    ssh.onClose = () => {
+      addLine('system', '--- Connection closed ---');
+      setSSHStatus('disconnected');
+    };
+
+    setSSHStatus('connecting');
+    setErrorMessage(undefined);
+    addLine('system', `Connecting to ${sshConfig.username}@${sshConfig.host}:${sshConfig.port}...`);
 
     try {
-      const output = await service.executeCommand(session.id, commandText);
-
-      const outputLine: TerminalLine = {
-        id: (Date.now() + 1).toString(),
-        type: 'output',
-        content: output || '(no output)',
-      };
-
-      setLines((prev) => [...prev, outputLine]);
-    } catch (error) {
-      const errorLine: TerminalLine = {
-        id: (Date.now() + 1).toString(),
-        type: 'error',
-        content: `Error: ${error}`,
-      };
-
-      setLines((prev) => [...prev, errorLine]);
-    } finally {
-      setExecuting(false);
+      await ssh.connect(sshConfig);
+      addLine('system', 'SSH connected. Starting shell...');
+      await ssh.startShell();
+      addLine('system', 'Shell ready.');
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      setErrorMessage(msg);
+      setSSHStatus('error');
+      addLine('error', `Connection failed: ${msg}`);
     }
-  };
+  }, [sshConfig, addLine]);
 
-  const handleHistoryUp = () => {
-    if (commandHistory.length === 0) return;
+  const handleDisconnect = useCallback(() => {
+    sshRef.current?.disconnect();
+    sshRef.current = null;
+    setSSHStatus('disconnected');
+    setErrorMessage(undefined);
+    addLine('system', '--- Disconnected ---');
+  }, [addLine]);
 
-    const newIndex = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
-    setHistoryIndex(newIndex);
-    setCommand(commandHistory[newIndex]);
-  };
+  const handleSendCommand = useCallback(
+    (command: string) => {
+      if (!sshRef.current?.hasShell) {
+        addLine('error', 'No active shell. Connect first.');
+        return;
+      }
+      // Send with newline to execute
+      sshRef.current.write(command + '\n');
+    },
+    [addLine],
+  );
 
-  const handleHistoryDown = () => {
-    if (historyIndex === -1) return;
-
-    if (historyIndex === commandHistory.length - 1) {
-      setHistoryIndex(-1);
-      setCommand('');
-    } else {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      setCommand(commandHistory[newIndex]);
-    }
-  };
-
-  const clearTerminal = () => {
-    setLines([
-      {
-        id: Date.now().toString(),
-        type: 'output',
-        content: 'Terminal cleared',
-      },
-    ]);
-  };
-
-  const renderLine = (line: TerminalLine): React.ReactElement => {
-    const lineClass = line.type === 'command' 
-      ? 'text-success font-bold' 
-      : line.type === 'error' 
-        ? 'text-danger' 
-        : 'text-text';
-
-    return (
-      <Text key={line.id} className={`font-mono text-[13px] leading-5 mb-1 ${lineClass}`}>
-        {line.content}
-      </Text>
-    );
-  };
+  const handleClear = useCallback(() => {
+    setLines([]);
+  }, []);
 
   return (
-    <View className="flex-1 bg-surface-elevated">
-      <View className="flex-row justify-between items-center p-4 bg-surface border-b border-border">
-        <Text className="text-xl font-bold text-text">Terminal</Text>
-        <View className="flex-row gap-2">
-          <TouchableOpacity className="bg-border-muted px-3 py-1.5 rounded-md min-w-[36] items-center" onPress={handleHistoryUp}>
-            <Text className="text-text text-base font-bold">↑</Text>
-          </TouchableOpacity>
-          <TouchableOpacity className="bg-border-muted px-3 py-1.5 rounded-md min-w-[36] items-center" onPress={handleHistoryDown}>
-            <Text className="text-text text-base font-bold">↓</Text>
-          </TouchableOpacity>
-          <TouchableOpacity className="bg-danger/10 border border-danger/20 px-3 py-1.5 rounded-md" onPress={clearTerminal}>
-            <Text className="text-danger font-semibold">Clear</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+    <KeyboardAvoidingView
+      className="flex-1 bg-surface-elevated"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <SSHStatusLine
+        status={sshStatus}
+        errorMessage={errorMessage}
+        onConnect={handleConnect}
+        onDisconnect={handleDisconnect}
+      />
 
-      <ScrollView
-        ref={scrollViewRef}
-        className="flex-1"
-        contentContainerClassName="p-3"
-      >
-        {lines.map(renderLine)}
-        {executing && (
-          <View className="flex-row items-center gap-2 mt-2">
-            <ActivityIndicator size="small" color={colors.success} />
-            <Text className="text-success text-[13px] font-mono">Executing...</Text>
-          </View>
-        )}
-      </ScrollView>
+      <SSHSettingsPanel
+        config={sshConfig}
+        onConfigChange={setSSHConfig}
+        disabled={sshStatus === 'connecting' || sshStatus === 'connected'}
+      />
 
-      <View className="flex-row items-center p-3 bg-surface border-t border-border">
-        <Text className="text-success text-base font-bold mr-2 font-mono">$</Text>
-        <TextInput
-          className="flex-1 text-text text-sm font-mono p-2 bg-surface-elevated rounded border border-border"
-          value={command}
-          onChangeText={setCommand}
-          placeholder="Enter command..."
-          placeholderTextColor={colors.textSubtle}
-          onSubmitEditing={executeCommand}
-          editable={!executing}
-          autoCapitalize="none"
-          autoCorrect={false}
-          testID="terminal-input"
-        />
-        <TouchableOpacity
-          className={`px-4 py-2 rounded-md ml-2 ${executing ? 'bg-border-muted' : 'bg-primary'}`}
-          onPress={executeCommand}
-          disabled={executing}
-          testID="terminal-send-btn"
-        >
-          <Text className="text-white font-semibold">Run</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View className="p-2 bg-surface border-t border-border">
-        <Text className="text-text-subtle text-[11px] text-center">
-          Tip: Use ↑ ↓ buttons to navigate command history
-        </Text>
-      </View>
-    </View>
+      <TerminalEmulator
+        lines={lines}
+        sshStatus={sshStatus}
+        onSendCommand={handleSendCommand}
+        onClear={handleClear}
+      />
+    </KeyboardAvoidingView>
   );
 }
