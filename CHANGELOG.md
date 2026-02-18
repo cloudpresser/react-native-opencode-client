@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.4...v2.2.0) (2026-02-18)
+
+
+### Features
+
+* **ci:** migrate to EAS Workflows with Maestro E2E tests ([1cfeff8](https://github.com/cloudpresser/react-native-opencode-client/commit/1cfeff86f21c29b1a842d0afdcaaab674cfa3d46))
+
 ## [2.1.4](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.1.3...v2.1.4) (2026-02-18)
 
 
