@@ -16,6 +16,8 @@ import { useStore } from '../../store';
 import { Server } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { ServerStatusBadge } from '../../components/ServerStatusBadge';
+import { useServerStatusContext } from '../../context/ServerStatusContext';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 
@@ -27,6 +29,7 @@ export default function AddEditServerScreen() {
   const route = useRoute<AddEditServerRouteProp>();
   const colors = useThemeColors();
   const editingServer = route.params?.server;
+  const { getStatus } = useServerStatusContext();
   
   const { addServer, updateServer } = useStore();
   const [saving, setSaving] = useState(false);
@@ -85,6 +88,16 @@ export default function AddEditServerScreen() {
         <View className="w-[60px]" />
       </View>
 
+      {editingServer && (
+        <View className="px-4 py-3 bg-surface border-b border-border">
+          <ServerStatusBadge
+            status={getStatus(editingServer.id)}
+            serverName={editingServer.name}
+            testId="connection-status-badge"
+          />
+        </View>
+      )}
+
       <ScrollView className="flex-1" contentContainerClassName="p-6">
         <TextInput
           className="border border-border rounded-lg p-3 text-base mb-3 text-text bg-surface"
@@ -139,7 +152,7 @@ export default function AddEditServerScreen() {
 
         <View className="flex-row gap-3 mt-2">
           <TouchableOpacity
-            className="flex-1 py-3 rounded-lg items-center bg-border-muted"
+            className="flex-1 py-3 rounded-lg items-center bg-surface border border-border"
             onPress={handleCancel}
             testID="cancel-server-button"
           >

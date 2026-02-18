@@ -92,7 +92,7 @@ export default function NewSessionScreen() {
 
         <View className="flex-row gap-3 mt-2">
           <TouchableOpacity
-            className="flex-1 py-3 rounded-lg items-center bg-border-muted"
+            className="flex-1 py-3 rounded-lg items-center bg-surface border border-border"
             onPress={handleCancel}
             testID="cancel-session-button"
           >

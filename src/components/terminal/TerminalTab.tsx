@@ -145,8 +145,8 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
           <TouchableOpacity className="bg-border-muted px-3 py-1.5 rounded-md min-w-[36] items-center" onPress={handleHistoryDown}>
             <Text className="text-text text-base font-bold">↓</Text>
           </TouchableOpacity>
-          <TouchableOpacity className="bg-danger px-3 py-1.5 rounded-md" onPress={clearTerminal}>
-            <Text className="text-white font-semibold">Clear</Text>
+          <TouchableOpacity className="bg-danger/10 border border-danger/20 px-3 py-1.5 rounded-md" onPress={clearTerminal}>
+            <Text className="text-danger font-semibold">Clear</Text>
           </TouchableOpacity>
         </View>
       </View>

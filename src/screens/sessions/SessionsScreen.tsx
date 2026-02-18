@@ -105,11 +105,11 @@ export default function SessionsScreen() {
         )}
       </View>
       <TouchableOpacity
-        className="bg-danger px-4 py-2 rounded-md"
+        className="bg-danger/10 border border-danger/20 px-4 py-2 rounded-md"
         onPress={() => handleDeleteSession(item)}
         testID="session-delete-btn"
       >
-        <Text className="text-white font-semibold">Delete</Text>
+        <Text className="text-danger font-semibold">Delete</Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );

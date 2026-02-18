@@ -103,8 +103,8 @@ export default function GitViewerTab({ session, server }: GitViewerTabProps) {
     <View className="flex-1 bg-background">
       <View className="flex-row justify-between items-center p-4 bg-surface border-b border-border">
         <Text className="text-xl font-bold text-text">Modified Files</Text>
-        <TouchableOpacity className="bg-primary px-4 py-2 rounded-lg" onPress={loadGitStatus} testID="refresh-git-btn">
-          <Text className="text-white font-semibold">Refresh</Text>
+        <TouchableOpacity className="bg-primary/10 border border-primary/20 px-4 py-2 rounded-lg" onPress={loadGitStatus} testID="refresh-git-btn">
+          <Text className="text-primary font-semibold">Refresh</Text>
         </TouchableOpacity>
       </View>
 
