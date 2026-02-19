@@ -16,6 +16,9 @@ on:
           - prod-apk
           - all
 
+permissions:
+  contents: write
+
 env:
   EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
   NODE_OPTIONS: --openssl-legacy-provider
