@@ -1,3 +1,11 @@
+# [2.6.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.5.1...v2.6.0) (2026-02-19)
+
+
+### Features
+
+* add server connection logs with callback/sink pattern ([398db93](https://github.com/cloudpresser/react-native-opencode-client/commit/398db93771b0d798f44739fc8624b125f9d42f95))
+* replace HTTP terminal with SSH terminal tab ([ca574c7](https://github.com/cloudpresser/react-native-opencode-client/commit/ca574c7c2499b356da1179a30f49a5352551ac64))
+
 ## [2.5.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.5.0...v2.5.1) (2026-02-18)
 
 
