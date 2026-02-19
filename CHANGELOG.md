@@ -1,3 +1,10 @@
+## [2.7.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.7.1...v2.7.2) (2026-02-19)
+
+
+### Bug Fixes
+
+* add missing withNMSSHSimulatorFix plugin required by app.json ([5592c38](https://github.com/cloudpresser/react-native-opencode-client/commit/5592c38272983129e676ce3edd9f9f464232274a))
+
 ## [2.7.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.7.0...v2.7.1) (2026-02-19)
 
 
