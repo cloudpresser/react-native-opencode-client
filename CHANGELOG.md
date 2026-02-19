@@ -1,3 +1,16 @@
+# [2.8.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.7.2...v2.8.0) (2026-02-19)
+
+
+### Bug Fixes
+
+* **eas-build:** update SLACK_MESSAGE formatting for better clarity ([3cca607](https://github.com/cloudpresser/react-native-opencode-client/commit/3cca60788fc1c9f9b858aa73d6994f9412f831a8))
+* remove nonexistent lint/format scripts, switch release to local build, drop Slack ([b56ca1e](https://github.com/cloudpresser/react-native-opencode-client/commit/b56ca1e12c011cc3717ad3d193ef0b7b95a46176))
+
+
+### Features
+
+* add Discord webhook notifications for build success/failure ([02db3bf](https://github.com/cloudpresser/react-native-opencode-client/commit/02db3bf6d33df68173deac0d624248627d638aa3))
+
 ## [2.7.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.7.2...v2.7.3) (2026-02-19)
 
 
