@@ -125,6 +125,50 @@ jobs:
             exit 1
           fi
 
+      - name: 🔑 Generate signing keystore
+        run: |
+          KEYSTORE_PATH="$PWD/release.keystore"
+          STORE_PASSWORD="${ANDROID_KEYSTORE_PASSWORD:-android}"
+          KEY_ALIAS="${ANDROID_KEY_ALIAS:-release-key}"
+          KEY_PASSWORD="${ANDROID_KEY_PASSWORD:-android}"
+
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Using keystore from repository secrets"
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+          else
+            echo "Generating ephemeral keystore for CI build"
+            keytool -genkeypair \
+              -v \
+              -storetype JKS \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "$STORE_PASSWORD" \
+              -keypass "$KEY_PASSWORD" \
+              -alias "$KEY_ALIAS" \
+              -keystore "$KEYSTORE_PATH" \
+              -dname "CN=CI Build,OU=Dev,O=Dev,L=Unknown,ST=Unknown,C=US"
+          fi
+
+          # Create credentials.json for EAS local build
+          cat > credentials.json <<CREDS
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "$KEYSTORE_PATH",
+                "keystorePassword": "$STORE_PASSWORD",
+                "keyAlias": "$KEY_ALIAS",
+                "keyPassword": "$KEY_PASSWORD"
+              }
+            }
+          }
+          CREDS
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
       - name: 📱 Build Production APK
         if: github.event.inputs.buildType == 'all' || github.event.inputs.buildType == 'prod-apk' || github.event_name == 'push'
         run: |
