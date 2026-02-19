@@ -1,3 +1,10 @@
+# [2.7.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.6.1...v2.7.0) (2026-02-19)
+
+
+### Features
+
+* enhance connection logs with full request/response debug details ([1c19178](https://github.com/cloudpresser/react-native-opencode-client/commit/1c19178ca8614f038851ead471c1291ba3d15543))
+
 ## [2.6.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.6.0...v2.6.1) (2026-02-19)
 
 
