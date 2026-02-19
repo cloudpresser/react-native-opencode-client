@@ -42,6 +42,16 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Set fun theme for CI
+        run: |
+          THEMES=(catppuccin-mocha dracula gruvbox-dark-hard nord tokyo-night-dark)
+          THEME=${THEMES[$RANDOM % ${#THEMES[@]}]}
+          echo "THEME=$THEME" >> $GITHUB_ENV
+          echo "Using theme: $THEME"
+
+      - name: Build theme
+        run: node scripts/build-theme.js
+
       - name: Run EAS Workflow (build)
         id: eas_workflow
         run: |
