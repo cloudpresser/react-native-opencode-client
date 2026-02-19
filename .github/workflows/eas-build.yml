@@ -1,4 +1,4 @@
-name: EAS Build (Manual)
+name: Build Android APK
 
 on:
   workflow_dispatch:
@@ -8,12 +8,18 @@ permissions:
 
 jobs:
   build:
-    name: Build via EAS Workflow
+    name: Build Android APK (Local)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -52,92 +58,61 @@ jobs:
       - name: Build theme
         run: node scripts/build-theme.js
 
-      - name: Run EAS Workflow (build)
-        id: eas_workflow
+      - name: Generate signing keystore
         run: |
-          echo "Triggering EAS Workflow: build.yaml"
+          KEYSTORE_DIR="$HOME/.android"
+          mkdir -p "$KEYSTORE_DIR"
 
-          set +eo pipefail
-          eas workflow:run .eas/workflows/build.yaml \
-            --wait --json --non-interactive \
-            1>eas_output.txt 2>eas_stderr.txt
-          EXIT_CODE=$?
-          set -eo pipefail
-
-          echo "--- EAS Workflow stderr ---"
-          cat eas_stderr.txt || true
-          echo "--- EAS Workflow stdout ---"
-          cat eas_output.txt || true
-          echo "--- Exit code: $EXIT_CODE ---"
-
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "::error::EAS Workflow failed (exit code $EXIT_CODE)"
-            exit 1
-          fi
-
-          # Strip any non-JSON prefix (e.g. "Waiting for workflow..." messages)
-          # and extract only the JSON object from the output
-          OUTPUT_JSON=$(sed -n '/^{/,$p' eas_output.txt)
-
-          if [ -z "$OUTPUT_JSON" ]; then
-            echo "::warning::No JSON found in EAS workflow output"
-            echo "build_id=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Extract build ID from EAS workflow JSON output
-          # Structure: { jobs: [ { outputs: { build_id }, turtleBuild: { id, artifacts: { buildUrl } } } ] }
-          BUILD_ID=$(echo "$OUTPUT_JSON" | jq -r '.jobs[0].outputs.build_id // .jobs[0].turtleBuild.id // .jobs[0].id // empty') || true
-
-          # Extract APK URL directly from workflow output (avoids polling)
-          APK_DIRECT_URL=$(echo "$OUTPUT_JSON" | jq -r '.jobs[0].turtleBuild.artifacts.buildUrl // empty') || true
-
-          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "Extracted build_id: $BUILD_ID"
-
-          if [ -n "$APK_DIRECT_URL" ] && [ "$APK_DIRECT_URL" != "null" ]; then
-            echo "apk_url=$APK_DIRECT_URL" >> $GITHUB_OUTPUT
-            echo "APK URL from workflow output: $APK_DIRECT_URL"
-          fi
-
-          if [ -z "$BUILD_ID" ]; then
-            echo "::warning::Could not extract build_id from workflow output — APK download will be skipped"
-          fi
-
-      - name: Download APK
-        if: startsWith(github.ref, 'refs/tags/v') && steps.eas_workflow.outputs.build_id != ''
-        run: |
-          BUILD_ID=${{ steps.eas_workflow.outputs.build_id }}
-          echo "Downloading APK for build $BUILD_ID"
-
-          # Use direct URL from workflow output if available, otherwise poll
-          APK_URL="${{ steps.eas_workflow.outputs.apk_url }}"
-          if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
-            echo "Using APK URL from workflow output: $APK_URL"
+          # Use secrets if available, otherwise generate a throwaway debug keystore
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Using keystore from secrets"
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_DIR/release.keystore"
+            KEYSTORE_PASSWORD="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}"
+            KEY_PASSWORD="${{ secrets.ANDROID_KEY_PASSWORD }}"
           else
-            echo "No direct URL, polling eas build:view..."
-            for i in $(seq 1 30); do
-              APK_URL=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.artifacts.buildUrl // empty')
-              if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
-                echo "APK URL found: $APK_URL"
-                break
-              fi
-              echo "Attempt $i/30: Artifact not ready yet, waiting 10s..."
-              sleep 10
-            done
+            echo "Generating ephemeral signing keystore"
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_DIR/release.keystore" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias release \
+              -dname "CN=CI Build,O=OpenCode Client,L=Unknown,S=Unknown,C=US" \
+              -storepass android -keypass android
+            KEYSTORE_PASSWORD="android"
+            KEY_ALIAS="release"
+            KEY_PASSWORD="android"
           fi
 
-          if [ -z "$APK_URL" ] || [ "$APK_URL" = "null" ]; then
-            echo "::error::Failed to get APK URL after 5 minutes"
-            eas build:view "$BUILD_ID" --json 2>&1 | jq '.' || true
-            exit 1
-          fi
+          # Write credentials.json for eas build --local
+          cat > credentials.json <<EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "$KEYSTORE_DIR/release.keystore",
+                "keystorePassword": "$KEYSTORE_PASSWORD",
+                "keyAlias": "$KEY_ALIAS",
+                "keyPassword": "$KEY_PASSWORD"
+              }
+            }
+          }
+          EOF
 
-          curl -L -o "opencode-client-v${{ steps.get_version.outputs.version }}.apk" "$APK_URL"
-          ls -lh *.apk
+      - name: Build APK locally
+        run: |
+          eas build --local \
+            --platform android \
+            --profile preview-local \
+            --non-interactive \
+            --output ./app-release.apk
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-client-v${{ steps.get_version.outputs.version }}.apk
+          path: ./app-release.apk
 
       - name: Upload APK to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') && steps.eas_workflow.outputs.build_id != ''
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
           files: opencode-client-v${{ steps.get_version.outputs.version }}.apk

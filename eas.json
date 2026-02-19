@@ -20,6 +20,16 @@
         "THEME": "tokyo-night-dark"
       }
     },
+    "preview-local": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      },
+      "env": {
+        "THEME": "tokyo-night-dark"
+      }
+    },
     "production": {
       "android": {
         "buildType": "apk",
