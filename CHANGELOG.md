@@ -1,3 +1,10 @@
+## [2.7.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.7.2...v2.7.3) (2026-02-19)
+
+
+### Bug Fixes
+
+* **eas-build:** escape quotes in Slack message for build results ([7445dbd](https://github.com/cloudpresser/react-native-opencode-client/commit/7445dbdc2fee3fc590d2faaabc3bfa8a99722dd0))
+
 ## [2.7.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.7.1...v2.7.2) (2026-02-19)
 
 
