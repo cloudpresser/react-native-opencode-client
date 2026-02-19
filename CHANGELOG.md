@@ -1,3 +1,10 @@
+## [2.7.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.7.0...v2.7.1) (2026-02-19)
+
+
+### Bug Fixes
+
+* add expo-clipboard dependency for connection logs copy feature ([a6c6d4e](https://github.com/cloudpresser/react-native-opencode-client/commit/a6c6d4e165b4db12ea95173d61ca7f7a1402ea42))
+
 # [2.7.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.6.1...v2.7.0) (2026-02-19)
 
 
