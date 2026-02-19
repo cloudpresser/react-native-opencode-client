@@ -1,4 +1,5 @@
 import SSHClient, { PtyType } from '@dylankenneally/react-native-ssh-sftp';
+import { Platform } from 'react-native';
 import { SSHConfig, SSHConnectionStatus } from '../types';
 
 type SSHEventCallback = (data: string) => void;
@@ -49,9 +50,13 @@ export class SSHService {
       this.setStatus('connected');
     } catch (error: any) {
       this.setStatus('error');
-      const message = error?.message || String(error);
+      let message = error?.message || String(error);
+      // NMSSH does not support iOS Simulator - provide a helpful hint
+      if (Platform.OS === 'ios' && message.includes('Connection to host')) {
+        message += '\n\nNote: SSH is not supported on the iOS Simulator. Please use a real device.';
+      }
       this.onError?.(`Connection failed: ${message}`);
-      throw error;
+      throw new Error(message);
     }
   }
 
