@@ -8,6 +8,7 @@ export type RootStackParamList = {
   NewSession: { server: Server };
   SessionDetail: { session: Session; server: Server };
   GitDiffViewer: { file: GitFile; session: Session; server: Server };
+  ConnectionLogs: { serverId: string; serverName: string };
 };
 
 export type SessionDetailTabParamList = {

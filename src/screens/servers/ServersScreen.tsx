@@ -70,6 +70,13 @@ export default function ServersScreen() {
           
           <View className="flex-row gap-2">
             <TouchableOpacity
+              className="px-3 py-1.5 rounded-md bg-text-muted/10 border border-border"
+              onPress={() => navigation.navigate('ConnectionLogs', { serverId: item.id, serverName: item.name })}
+              testID={`logs-server-btn-${item.name}`}
+            >
+              <Text className="text-text-muted font-medium text-sm">Logs</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               className="px-3 py-1.5 rounded-md bg-primary/10 border border-primary/20"
               onPress={() => handleEdit(item)}
               testID={`edit-server-btn-${item.name}`}

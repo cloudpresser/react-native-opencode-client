@@ -484,6 +484,24 @@ export class OpenCodeService {
     }
   }
 
+  async healthCheckWithDetails(timeoutMs: number = 5000): Promise<{ ok: boolean; status: number; statusText: string }> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    try {
+      const response = await fetch(`${this.baseUrl}/global/health`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return { ok: response.ok, status: response.status, statusText: response.statusText };
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
   private getHeaders(): Record<string, string> {
 const headers: Record<string, string> = {
       'Content-Type': 'application/json',

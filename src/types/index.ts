@@ -1,4 +1,17 @@
-export type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
+export type ConnectionStatus = 'connected' | 'disconnected' | 'checking' | 'error';
+
+export interface ConnectionLogEntry {
+  id: string;
+  serverId: string;
+  timestamp: string;
+  status: 'success' | 'failed';
+  errorType?: 'network' | 'auth' | 'timeout' | 'server' | 'unknown';
+  httpCode?: number;
+  errorMessage?: string;
+  latencyMs?: number;
+}
+
+export type ConnectionLogCallback = (entry: ConnectionLogEntry) => void;
 
 export type SSHConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 

@@ -26,6 +26,8 @@ export const ServerStatusBadge: React.FC<ServerStatusBadgeProps> = ({
         return colors.danger;
       case 'checking':
         return colors.textMuted;
+      case 'error':
+        return colors.warning;
     }
   };
 
@@ -37,6 +39,8 @@ export const ServerStatusBadge: React.FC<ServerStatusBadgeProps> = ({
         return 'Disconnected';
       case 'checking':
         return 'Checking...';
+      case 'error':
+        return 'Error';
     }
   };
 

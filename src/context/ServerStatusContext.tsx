@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { Server, ConnectionStatus } from '../types';
+import { Server, ConnectionStatus, ConnectionLogEntry, ConnectionLogCallback } from '../types';
 import { checkServerHealth } from '../services/serverStatus';
 import { useStore } from '../store';
 
@@ -7,18 +7,32 @@ interface ServerStatusContextValue {
   statuses: Record<string, ConnectionStatus>;
   getStatus: (serverId: string) => ConnectionStatus;
   checkNow: (server: Server) => Promise<void>;
+  registerLogCallback: (serverId: string, callback: ConnectionLogCallback) => () => void;
 }
 
 const ServerStatusContext = createContext<ServerStatusContextValue | null>(null);
 
 const INTERVAL_DISCONNECTED = 3000;
 const INTERVAL_CONNECTED = 10000;
+const INTERVAL_ERROR = 5000;
+
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
 
 export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const servers = useStore((state) => state.servers);
   const [statuses, setStatuses] = useState<Record<string, ConnectionStatus>>({});
   const intervalsRef = useRef<Record<string, NodeJS.Timeout>>({});
   const checkingRef = useRef<Record<string, boolean>>({});
+  const logCallbacksRef = useRef<Record<string, ConnectionLogCallback[]>>({});
+
+  const emitLog = useCallback((serverId: string, entry: ConnectionLogEntry) => {
+    const callbacks = logCallbacksRef.current[serverId];
+    if (callbacks) {
+      callbacks.forEach(cb => cb(entry));
+    }
+  }, []);
 
   const checkServer = useCallback(async (server: Server) => {
     if (checkingRef.current[server.id]) return;
@@ -29,14 +43,27 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       [server.id]: 'checking',
     }));
 
-    const status = await checkServerHealth(server);
+    const result = await checkServerHealth(server);
+    
+    const logEntry: ConnectionLogEntry = {
+      id: generateId(),
+      serverId: server.id,
+      timestamp: new Date().toISOString(),
+      status: result.status === 'connected' ? 'success' : 'failed',
+      errorType: result.errorType,
+      httpCode: result.httpCode,
+      errorMessage: result.errorMessage,
+      latencyMs: result.latencyMs,
+    };
+    
+    emitLog(server.id, logEntry);
     
     setStatuses((prev) => ({
       ...prev,
-      [server.id]: status,
+      [server.id]: result.status,
     }));
     checkingRef.current[server.id] = false;
-  }, []);
+  }, [emitLog]);
 
   const startPolling = useCallback((server: Server) => {
     if (intervalsRef.current[server.id]) {
@@ -47,7 +74,9 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const getInterval = () => {
       const status = statuses[server.id];
-      return status === 'connected' ? INTERVAL_CONNECTED : INTERVAL_DISCONNECTED;
+      if (status === 'connected') return INTERVAL_CONNECTED;
+      if (status === 'error') return INTERVAL_ERROR;
+      return INTERVAL_DISCONNECTED;
     };
 
     let interval = getInterval();
@@ -115,7 +144,10 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const currentInterval = intervalsRef.current[server.id];
         if (currentInterval) {
           clearInterval(currentInterval);
-          const newInterval = currentStatus === 'connected' ? INTERVAL_CONNECTED : INTERVAL_DISCONNECTED;
+          let newInterval = INTERVAL_DISCONNECTED;
+          if (currentStatus === 'connected') newInterval = INTERVAL_CONNECTED;
+          else if (currentStatus === 'error') newInterval = INTERVAL_ERROR;
+          
           intervalsRef.current[server.id] = setInterval(() => {
             checkServer(server);
           }, newInterval);
@@ -132,8 +164,19 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     await checkServer(server);
   }, [checkServer]);
 
+  const registerLogCallback = useCallback((serverId: string, callback: ConnectionLogCallback): (() => void) => {
+    if (!logCallbacksRef.current[serverId]) {
+      logCallbacksRef.current[serverId] = [];
+    }
+    logCallbacksRef.current[serverId].push(callback);
+    
+    return () => {
+      logCallbacksRef.current[serverId] = logCallbacksRef.current[serverId].filter(cb => cb !== callback);
+    };
+  }, []);
+
   return (
-    <ServerStatusContext.Provider value={{ statuses, getStatus, checkNow }}>
+    <ServerStatusContext.Provider value={{ statuses, getStatus, checkNow, registerLogCallback }}>
       {children}
     </ServerStatusContext.Provider>
   );
