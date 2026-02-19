@@ -1,3 +1,10 @@
+## [2.6.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.6.0...v2.6.1) (2026-02-19)
+
+
+### Bug Fixes
+
+* add helpful error hint for iOS Simulator SSH limitation ([5575ff1](https://github.com/cloudpresser/react-native-opencode-client/commit/5575ff19a369f82c2b6509b779c750e781e1eb2d))
+
 # [2.6.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.5.1...v2.6.0) (2026-02-19)
 
 
