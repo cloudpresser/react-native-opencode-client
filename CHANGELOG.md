@@ -1,3 +1,10 @@
+## [2.8.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.0...v2.8.1) (2026-02-19)
+
+
+### Bug Fixes
+
+* add missing production-apk build profile to eas.json ([367ee31](https://github.com/cloudpresser/react-native-opencode-client/commit/367ee3179761dbafa4f73d1512f43c6ca210217e))
+
 # [2.8.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.7.2...v2.8.0) (2026-02-19)
 
 
