@@ -1,3 +1,10 @@
+## [2.8.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.1...v2.8.2) (2026-02-19)
+
+
+### Bug Fixes
+
+* remove metro.config.js SVG rewrite that breaks build ([5cf7425](https://github.com/cloudpresser/react-native-opencode-client/commit/5cf742518c8d0977a1ae951221b3df1fccda5eb1))
+
 ## [2.8.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.0...v2.8.1) (2026-02-19)
 
 
