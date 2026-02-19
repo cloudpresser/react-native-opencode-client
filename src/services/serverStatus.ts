@@ -7,6 +7,11 @@ export interface HealthCheckResult {
   httpCode?: number;
   errorType?: 'network' | 'auth' | 'timeout' | 'server' | 'unknown';
   errorMessage?: string;
+  requestUrl?: string;
+  requestMethod?: string;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
 }
 
 export async function checkServerHealth(server: Server): Promise<HealthCheckResult> {
@@ -18,7 +23,15 @@ export async function checkServerHealth(server: Server): Promise<HealthCheckResu
     const latencyMs = Date.now() - startTime;
     
     if (response.ok) {
-      return { status: 'connected', latencyMs };
+      return {
+        status: 'connected',
+        latencyMs,
+        requestUrl: response.requestUrl,
+        requestMethod: response.requestMethod,
+        requestHeaders: response.requestHeaders,
+        responseHeaders: response.responseHeaders,
+        responseBody: response.responseBody,
+      };
     } else {
       return {
         status: 'error',
@@ -26,6 +39,11 @@ export async function checkServerHealth(server: Server): Promise<HealthCheckResu
         httpCode: response.status,
         errorType: response.status === 401 ? 'auth' : 'server',
         errorMessage: response.statusText,
+        requestUrl: response.requestUrl,
+        requestMethod: response.requestMethod,
+        requestHeaders: response.requestHeaders,
+        responseHeaders: response.responseHeaders,
+        responseBody: response.responseBody,
       };
     }
   } catch (error: any) {
@@ -37,6 +55,9 @@ export async function checkServerHealth(server: Server): Promise<HealthCheckResu
                : error.message?.toLowerCase().includes('network') ? 'network' 
                : 'unknown',
       errorMessage: error.message,
+      requestUrl: error._requestUrl,
+      requestMethod: error._requestMethod,
+      requestHeaders: error._requestHeaders,
     };
   }
 }

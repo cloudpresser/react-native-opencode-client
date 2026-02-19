@@ -9,6 +9,11 @@ export interface ConnectionLogEntry {
   httpCode?: number;
   errorMessage?: string;
   latencyMs?: number;
+  requestUrl?: string;
+  requestMethod?: string;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
 }
 
 export type ConnectionLogCallback = (entry: ConnectionLogEntry) => void;

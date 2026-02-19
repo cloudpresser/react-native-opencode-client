@@ -484,20 +484,58 @@ export class OpenCodeService {
     }
   }
 
-  async healthCheckWithDetails(timeoutMs: number = 5000): Promise<{ ok: boolean; status: number; statusText: string }> {
+  async healthCheckWithDetails(timeoutMs: number = 5000): Promise<{
+    ok: boolean;
+    status: number;
+    statusText: string;
+    requestUrl: string;
+    requestMethod: string;
+    requestHeaders: Record<string, string>;
+    responseHeaders: Record<string, string>;
+    responseBody: string;
+  }> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const url = `${this.baseUrl}/global/health`;
+    const method = 'GET';
+    const requestHeaders = this.getHeaders();
     
     try {
-      const response = await fetch(`${this.baseUrl}/global/health`, {
-        method: 'GET',
-        headers: this.getHeaders(),
+      const response = await fetch(url, {
+        method,
+        headers: requestHeaders,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      return { ok: response.ok, status: response.status, statusText: response.statusText };
+
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value: string, key: string) => {
+        responseHeaders[key] = value;
+      });
+
+      let responseBody = '';
+      try {
+        responseBody = await response.text();
+        if (responseBody.length > 1024) {
+          responseBody = responseBody.substring(0, 1024) + '... (truncated)';
+        }
+      } catch (_) {}
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        requestUrl: url,
+        requestMethod: method,
+        requestHeaders,
+        responseHeaders,
+        responseBody,
+      };
     } catch (error: any) {
       clearTimeout(timeoutId);
+      error._requestUrl = url;
+      error._requestMethod = method;
+      error._requestHeaders = requestHeaders;
       throw error;
     }
   }

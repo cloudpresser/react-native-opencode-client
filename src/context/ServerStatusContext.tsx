@@ -54,6 +54,11 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       httpCode: result.httpCode,
       errorMessage: result.errorMessage,
       latencyMs: result.latencyMs,
+      requestUrl: result.requestUrl,
+      requestMethod: result.requestMethod,
+      requestHeaders: result.requestHeaders,
+      responseHeaders: result.responseHeaders,
+      responseBody: result.responseBody,
     };
     
     emitLog(server.id, logEntry);
