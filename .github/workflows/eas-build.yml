@@ -74,7 +74,6 @@ jobs:
           SLACK_WEBHOOK: ${{ env.SLACK_WEBHOOK }}
           SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
           SLACK_TITLE: Test Results
-          SLACK_MESSAGE: 'Tests ${{ job.status == "success" && "passed ✅" || "failed ❌" }}'
 
   build-and-release:
     needs: test
