@@ -199,4 +199,20 @@ jobs:
             ./app-prod.apk
           retention-days: 7
 
+      - name: 🔔 Discord notification (success)
+        if: success() && env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"✅ **Build Android APK** succeeded\\n**Version:** v${{ steps.build-info.outputs.version }}-${{ steps.build-info.outputs.build_number }}\\n**Branch:** \`${{ github.ref_name }}\`\\n**Commit:** \`${{ github.sha }}\`\\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$DISCORD_WEBHOOK"
 
+      - name: 🔔 Discord notification (failure)
+        if: failure() && env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"❌ **Build Android APK** failed\\n**Branch:** \`${{ github.ref_name }}\`\\n**Commit:** \`${{ github.sha }}\`\\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$DISCORD_WEBHOOK"

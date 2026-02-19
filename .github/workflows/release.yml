@@ -148,3 +148,21 @@ jobs:
         with:
           name: release-apk-${{ steps.get_version.outputs.version }}
           path: ./app-release.apk
+
+      - name: 🔔 Discord notification (success)
+        if: success() && env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"✅ **Release** v${{ steps.get_version.outputs.version }} published\\n**APK uploaded to:** ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.release.outputs.new_tag }}\\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$DISCORD_WEBHOOK"
+
+      - name: 🔔 Discord notification (failure)
+        if: failure() && env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"❌ **Release** build failed for ${{ needs.release.outputs.new_tag }}\\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$DISCORD_WEBHOOK"
