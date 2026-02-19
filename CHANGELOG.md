@@ -1,3 +1,10 @@
+## [2.8.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.2...v2.8.3) (2026-02-19)
+
+
+### Bug Fixes
+
+* add keystore generation and credentials.json for local Android build ([4ac15a8](https://github.com/cloudpresser/react-native-opencode-client/commit/4ac15a8805bda57e80316ed90779c9e2172fab0d))
+
 ## [2.8.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.1...v2.8.2) (2026-02-19)
 
 
