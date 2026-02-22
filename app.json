@@ -15,7 +15,12 @@
     },
     "ios": {
       "bundleIdentifier": "com.cloudpresser.opencodeclient",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "android": {
       "package": "com.cloudpresser.opencodeclient",
@@ -39,6 +44,7 @@
         "expo-build-properties",
         {
           "android": {
+            "usesCleartextTraffic": true,
             "packagingOptions": {
               "exclude": [
                 "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
