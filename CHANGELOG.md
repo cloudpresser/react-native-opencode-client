@@ -1,3 +1,10 @@
+## [2.8.5](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.4...v2.8.5) (2026-02-22)
+
+
+### Bug Fixes
+
+* allow cleartext HTTP on Android and local networking on iOS ([e9e6c0a](https://github.com/cloudpresser/react-native-opencode-client/commit/e9e6c0add8462102a7f63560d09012bf4eb0b6c5))
+
 ## [2.8.4](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.3...v2.8.4) (2026-02-19)
 
 
