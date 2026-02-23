@@ -18,7 +18,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
-import { ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
+import { Agent, ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
 import { OpenCodeService, Message as ApiMessage, ToolMetadata } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import MarkdownRenderer from './MarkdownRenderer';
@@ -117,14 +117,33 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
-  const [selectedAgent, setSelectedAgent] = useState<string>('coder');
+  const [selectedAgent, setSelectedAgent] = useState<string>('build');
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
 
-  const AGENTS = [
-    { id: 'coder', label: 'Coder', description: 'Default coding agent' },
-    { id: 'task', label: 'Task', description: 'Task-oriented agent' },
-    { id: 'explore', label: 'Explore', description: 'Codebase exploration' },
-  ];
+  useEffect(() => {
+    const loadAgents = async () => {
+      try {
+        setAgentsLoading(true);
+        const fetchedAgents = await service.getAgents();
+        // Show only non-hidden primary agents in the picker
+        const primaryAgents = fetchedAgents.filter(
+          (a) => a.mode === 'primary' && !a.hidden
+        );
+        setAgents(primaryAgents);
+        // Default to first primary agent if current selection isn't in the list
+        if (primaryAgents.length > 0 && !primaryAgents.find((a) => a.name === selectedAgent)) {
+          setSelectedAgent(primaryAgents[0].name);
+        }
+      } catch (error) {
+        console.error('Error loading agents:', error);
+      } finally {
+        setAgentsLoading(false);
+      }
+    };
+    loadAgents();
+  }, [service]);
 
   const sessionMessages = messages[session.id] || [];
   const canLoadMore = hasMoreMessages[session.id] ?? true;
@@ -302,7 +321,8 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         (chunk) => {
           fullResponse += chunk;
           setStreamingText(fullResponse);
-        }
+        },
+        selectedAgent
       );
 
       const assistantMessage: ChatMessage = {
@@ -529,14 +549,20 @@ keyExtractor={(item: MessageAttachment) => item.id}
         {/* Agent selector row */}
         <View className="flex-row items-center px-3 pt-2 pb-1">
           <Text className="text-text-subtle text-xs mr-2">Agent:</Text>
-          <TouchableOpacity
-            onPress={() => setShowAgentPicker(true)}
-            className="flex-row items-center bg-surface-elevated px-2.5 py-1 rounded-full border border-border"
-            testID="agent-selector"
-          >
-            <Text className="text-text text-xs font-medium">{AGENTS.find(a => a.id === selectedAgent)?.label ?? selectedAgent}</Text>
-            <Text className="text-text-muted text-[10px] ml-1">▼</Text>
-          </TouchableOpacity>
+          {agentsLoading ? (
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          ) : agents.length > 0 ? (
+            <TouchableOpacity
+              onPress={() => setShowAgentPicker(true)}
+              className="flex-row items-center bg-surface-elevated px-2.5 py-1 rounded-full border border-border"
+              testID="agent-selector"
+            >
+              <Text className="text-text text-xs font-medium">{agents.find(a => a.name === selectedAgent)?.name ?? selectedAgent}</Text>
+              <Text className="text-text-muted text-[10px] ml-1">▼</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text className="text-text-subtle text-xs">No agents available</Text>
+          )}
         </View>
 
         {/* Input row */}
@@ -597,22 +623,24 @@ keyExtractor={(item: MessageAttachment) => item.id}
         >
           <View className="bg-surface rounded-t-2xl p-4 pb-8">
             <Text className="text-text font-semibold text-base mb-3">Select Agent</Text>
-            {AGENTS.map((agent) => (
+            {agents.map((agent) => (
               <TouchableOpacity
-                key={agent.id}
-                className={`flex-row items-center p-3 rounded-lg mb-1 ${selectedAgent === agent.id ? 'bg-primary/10 border border-primary' : 'border border-transparent'}`}
+                key={agent.name}
+                className={`flex-row items-center p-3 rounded-lg mb-1 ${selectedAgent === agent.name ? 'bg-primary/10 border border-primary' : 'border border-transparent'}`}
                 onPress={() => {
-                  setSelectedAgent(agent.id);
+                  setSelectedAgent(agent.name);
                   setShowAgentPicker(false);
                 }}
               >
                 <View className="flex-1">
-                  <Text className={`text-sm font-medium ${selectedAgent === agent.id ? 'text-primary' : 'text-text'}`}>
-                    {agent.label}
+                  <Text className={`text-sm font-medium ${selectedAgent === agent.name ? 'text-primary' : 'text-text'}`}>
+                    {agent.name}
                   </Text>
-                  <Text className="text-text-subtle text-xs">{agent.description}</Text>
+                  {agent.description && (
+                    <Text className="text-text-subtle text-xs">{agent.description}</Text>
+                  )}
                 </View>
-                {selectedAgent === agent.id && (
+                {selectedAgent === agent.name && (
                   <Text className="text-primary text-sm">✓</Text>
                 )}
               </TouchableOpacity>
