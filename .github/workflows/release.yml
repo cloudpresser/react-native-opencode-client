@@ -74,13 +74,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Expo & EAS CLI
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
       - name: Extract version from tag
         id: get_version
         run: |
@@ -92,22 +85,48 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Pick random theme
+        id: theme
+        run: |
+          THEMES=($(ls src/themes/*.json | xargs -I{} basename {} .json))
+          SELECTED=${THEMES[$RANDOM % ${#THEMES[@]}]}
+          echo "name=$SELECTED" >> $GITHUB_OUTPUT
+          echo "Selected theme: $SELECTED"
+
+      - name: Generate native fingerprint
+        id: fingerprint
+        run: |
+          FINGERPRINT=$(node scripts/native-fingerprint.js --platform android)
+          echo "hash=$FINGERPRINT" >> $GITHUB_OUTPUT
+          echo "Native fingerprint: $FINGERPRINT"
+
+      - name: Run Expo prebuild
+        run: npx expo prebuild --platform android --clean
+        env:
+          EXPO_NO_GIT_STATUS: "1"
+
       - name: Generate signing keystore
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android-keystore.jks
-            cat > credentials.json << 'CREDS'
-          {
-            "android": {
-              "keystore": {
-                "keystorePath": "android-keystore.jks",
-                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
-                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
-                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+            KEYSTORE_ABS="$GITHUB_WORKSPACE/android-keystore.jks"
+            cat > android/app/eas-build.gradle << EOF
+          android {
+            signingConfigs {
+              release {
+                storeFile file("$KEYSTORE_ABS")
+                storePassword "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+                keyAlias "${{ secrets.ANDROID_KEY_ALIAS }}"
+                keyPassword "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+            buildTypes {
+              release {
+                signingConfig signingConfigs.release
               }
             }
           }
-          CREDS
+          EOF
           else
             echo "No keystore secrets found, generating ephemeral keystore..."
             keytool -genkeypair -v \
@@ -116,24 +135,55 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass android -keypass android \
               -dname "CN=CI Build, O=CI, C=US"
-            cat > credentials.json << 'CREDS'
-          {
-            "android": {
-              "keystore": {
-                "keystorePath": "android-keystore.jks",
-                "keystorePassword": "android",
-                "keyAlias": "release",
-                "keyPassword": "android"
+            KEYSTORE_ABS="$GITHUB_WORKSPACE/android-keystore.jks"
+            cat > android/app/eas-build.gradle << EOF
+          android {
+            signingConfigs {
+              release {
+                storeFile file("$KEYSTORE_ABS")
+                storePassword "android"
+                keyAlias "release"
+                keyPassword "android"
+              }
+            }
+            buildTypes {
+              release {
+                signingConfig signingConfigs.release
               }
             }
           }
-          CREDS
+          EOF
           fi
 
-      - name: Build APK locally
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('android/build.gradle', 'android/app/build.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+
+      - name: Cache native build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/.gradle
+            android/app/build
+            android/build
+          key: ${{ runner.os }}-native-build-${{ steps.fingerprint.outputs.hash }}
+
+      - name: Build APK with Gradle
+        run: ./gradlew :app:assembleRelease
+        working-directory: android
+        env:
+          THEME: ${{ steps.theme.outputs.name }}
+
+      - name: Collect APK
         run: |
-          eas build --platform android --profile preview-local --local \
-            --output ./app-release.apk --non-interactive
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            ./app-release.apk
 
       - name: Upload APK to GitHub Release
         uses: softprops/action-gh-release@v1
@@ -149,20 +199,20 @@ jobs:
           name: release-apk-${{ steps.get_version.outputs.version }}
           path: ./app-release.apk
 
-      - name: 🔔 Discord notification (success)
+      - name: Discord notification (success)
         if: success() && env.DISCORD_WEBHOOK != ''
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           curl -H "Content-Type: application/json" \
-            -d "{\"content\": \"✅ **Release** v${{ steps.get_version.outputs.version }} published\\n**APK uploaded to:** ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.release.outputs.new_tag }}\\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            -d "{\"content\": \"Release v${{ steps.get_version.outputs.version }} published\\nNative fingerprint: ${{ steps.fingerprint.outputs.hash }}\\nAPK uploaded to: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.release.outputs.new_tag }}\\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
             "$DISCORD_WEBHOOK"
 
-      - name: 🔔 Discord notification (failure)
+      - name: Discord notification (failure)
         if: failure() && env.DISCORD_WEBHOOK != ''
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           curl -H "Content-Type: application/json" \
-            -d "{\"content\": \"❌ **Release** build failed for ${{ needs.release.outputs.new_tag }}\\n**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            -d "{\"content\": \"Release build failed for ${{ needs.release.outputs.new_tag }}\\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
             "$DISCORD_WEBHOOK"

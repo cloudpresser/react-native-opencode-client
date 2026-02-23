@@ -12,9 +12,6 @@ permissions:
   contents: read
   pull-requests: write
 
-env:
-  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
 jobs:
   typecheck:
     name: Type Check
@@ -55,23 +52,28 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Setup Expo & EAS CLI
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Cache EAS local builds
-        uses: actions/cache@v3
-        with:
-          path: ~/.eas-build-local
-          key: ${{ runner.os }}-eas-build-local-${{ hashFiles('**/package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-eas-build-local-
+      - name: Pick random theme
+        id: theme
+        run: |
+          THEMES=($(ls src/themes/*.json | xargs -I{} basename {} .json))
+          SELECTED=${THEMES[$RANDOM % ${#THEMES[@]}]}
+          echo "name=$SELECTED" >> $GITHUB_OUTPUT
+          echo "Selected theme: $SELECTED"
+
+      - name: Generate native fingerprint
+        id: fingerprint
+        run: |
+          FINGERPRINT=$(node scripts/native-fingerprint.js --platform android)
+          echo "hash=$FINGERPRINT" >> $GITHUB_OUTPUT
+          echo "Native fingerprint: $FINGERPRINT"
+
+      - name: Run Expo prebuild
+        run: npx expo prebuild --platform android --clean
+        env:
+          EXPO_NO_GIT_STATUS: "1"
 
       - name: Generate ephemeral signing keystore
         run: |
@@ -81,24 +83,57 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android \
             -dname "CN=PR Build, O=CI, C=US"
-          cat > credentials.json << 'CREDS'
-          {
-            "android": {
-              "keystore": {
-                "keystorePath": "android-keystore.jks",
-                "keystorePassword": "android",
-                "keyAlias": "release",
-                "keyPassword": "android"
+
+      - name: Create signing config for Gradle
+        run: |
+          KEYSTORE_ABS="$GITHUB_WORKSPACE/android-keystore.jks"
+          cat > android/app/eas-build.gradle << EOF
+          android {
+            signingConfigs {
+              release {
+                storeFile file("$KEYSTORE_ABS")
+                storePassword "android"
+                keyAlias "release"
+                keyPassword "android"
+              }
+            }
+            buildTypes {
+              release {
+                signingConfig signingConfigs.release
               }
             }
           }
-          CREDS
+          EOF
 
-      - name: Build APK
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('android/build.gradle', 'android/app/build.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+
+      - name: Cache native build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/.gradle
+            android/app/build
+            android/build
+          key: ${{ runner.os }}-native-build-${{ steps.fingerprint.outputs.hash }}
+
+      - name: Build APK with Gradle
+        run: ./gradlew :app:assembleRelease
+        working-directory: android
+        env:
+          THEME: ${{ steps.theme.outputs.name }}
+
+      - name: Collect APK
         run: |
-          eas build --platform android --profile preview-local --local \
-            --output ./app-pr-${{ github.event.pull_request.number }}.apk \
-            --non-interactive
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            ./app-pr-${{ github.event.pull_request.number }}.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -119,4 +154,6 @@ jobs:
 
             - **Artifact:** `pr-apk-${{ github.event.pull_request.number }}`
             - **Commit:** `${{ github.event.pull_request.head.sha }}`
+            - **Theme:** `${{ steps.theme.outputs.name }}`
+            - **Native fingerprint:** `${{ steps.fingerprint.outputs.hash }}`
             - **Expires:** 14 days
