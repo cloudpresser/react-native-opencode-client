@@ -173,8 +173,8 @@ export default function ProjectsScreen() {
         >
           <Text className="text-base text-primary">← Back</Text>
         </TouchableOpacity>
-        <View className="items-center">
-          <Text className="text-xl font-bold text-text">{server.name}</Text>
+        <View className="flex-1 items-center mx-3">
+          <Text className="text-xl font-bold text-text" numberOfLines={1}>{server.name}</Text>
           <Text className="text-xs text-text-muted">Projects</Text>
         </View>
         <TouchableOpacity
@@ -182,7 +182,7 @@ export default function ProjectsScreen() {
           onPress={() => navigation.navigate('SelectDirectory', { server })}
           testID="open-folder-btn"
         >
-          <Text className="text-white font-semibold">+ Open</Text>
+          <Text className="text-white font-semibold">Open</Text>
         </TouchableOpacity>
       </View>
 

@@ -133,16 +133,16 @@ export default function SessionsScreen() {
         >
           <Text className="text-base text-primary">← Back</Text>
         </TouchableOpacity>
-        <View className="items-center">
-          <Text className="text-xl font-bold text-text">{headerTitle}</Text>
-          <Text className="text-xs text-text-muted">{server.name}</Text>
+        <View className="flex-1 items-center mx-3">
+          <Text className="text-xl font-bold text-text" numberOfLines={1}>{headerTitle}</Text>
+          <Text className="text-xs text-text-muted" numberOfLines={1}>{server.name}</Text>
         </View>
         <TouchableOpacity 
           className="bg-primary px-4 py-2 rounded-lg"
           onPress={() => navigation.navigate('NewSession', { server, project })}
           testID="create-session-btn"
         >
-          <Text className="text-white font-semibold">+ New</Text>
+          <Text className="text-white font-semibold">New</Text>
         </TouchableOpacity>
       </View>
 
