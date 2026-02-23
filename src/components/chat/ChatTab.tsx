@@ -13,6 +13,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
@@ -145,6 +146,17 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     };
     loadAgents();
   }, [service]);
+
+  // Auto-scroll to bottom when keyboard opens
+  useEffect(() => {
+    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(event, () => {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    return () => sub.remove();
+  }, []);
 
   const sessionMessages = messages[session.id] || [];
   const canLoadMore = hasMoreMessages[session.id] ?? true;
@@ -516,7 +528,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     <KeyboardAvoidingView
       className="flex-1 bg-background"
       behavior="padding"
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 120}
       testID="chat-tab"
     >
       <FlatList
