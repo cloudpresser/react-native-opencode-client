@@ -25,6 +25,7 @@ import { OpenCodeService, Message as ApiMessage, ToolMetadata } from '../../serv
 import { useThemeColors } from '../../hooks/useThemeColors';
 import MarkdownRenderer from './MarkdownRenderer';
 import ToolCallDisplay from './ToolCallDisplay';
+import QuestionDisplay from './QuestionDisplay';
 
 const StyledImage = withUniwind(Image);
 const StyledActivityIndicator = withUniwind(ActivityIndicator);
@@ -90,6 +91,18 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
             mimeType: part.mimeType || part.mediaType || 'application/octet-stream',
           });
         }
+        break;
+      case 'question':
+        chatParts.push({
+          type: 'question',
+          question: {
+            id: part.questionId,
+            text: part.text,
+            kind: part.kind,
+            options: part.options,
+            default: part.default,
+          },
+        });
         break;
       // step-start and source-url are structural, skip
     }
@@ -368,6 +381,53 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     }
   };
 
+  const handleAnswerQuestion = async (questionId: string, answer: any) => {
+    const answerText = typeof answer === 'string' ? answer : JSON.stringify(answer);
+    
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: answerText,
+      timestamp: new Date().toISOString(),
+    };
+
+    addMessage(session.id, userMessage);
+    setLoading(true);
+    setStreamingText('');
+
+    try {
+      let streamedText = '';
+      await service.streamMessage(
+        session.id,
+        answerText,
+        undefined,
+        {
+          onTextDelta: (delta) => {
+            streamedText += delta;
+            setStreamingText(streamedText);
+          },
+          onComplete: async () => {
+            try {
+              const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+              const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+              setMessages(session.id, chatMessages);
+            } catch (err) {
+              console.error('Error fetching final messages:', err);
+            }
+          },
+        },
+        selectedAgent
+      );
+      setStreamingText('');
+    } catch (error) {
+      console.error('Error answering question:', error);
+      Alert.alert('Error', 'Failed to send answer');
+    } finally {
+      setLoading(false);
+      setStreamingText('');
+    }
+  };
+
   const renderMessageContent = (item: ChatMessage) => {
     const isUser = item.role === 'user';
     const parts = item.parts;
@@ -397,6 +457,20 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             case 'tool-call':
               if (part.toolCall) {
                 return <ToolCallDisplay key={part.toolCall.toolCallId || idx} toolCall={part.toolCall} />;
+              }
+              return null;
+            
+            case 'question':
+              if (part.question) {
+                const isLastMessage = sessionMessages.length > 0 && sessionMessages[sessionMessages.length - 1].id === item.id;
+                return (
+                  <QuestionDisplay
+                    key={part.question.id || idx}
+                    question={part.question}
+                    onAnswer={(answer) => handleAnswerQuestion(part.question!.id, answer)}
+                    answered={!isLastMessage}
+                  />
+                );
               }
               return null;
 

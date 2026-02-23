@@ -61,6 +61,15 @@ export interface ImagePart {
   image?: string;
 }
 
+export interface QuestionPart {
+  type: 'question';
+  questionId: string;
+  text: string;
+  kind: 'text' | 'confirm' | 'select' | 'multi-select';
+  options?: string[];
+  default?: any;
+}
+
 export type MessagePart =
   | TextPart
   | ReasoningPart
@@ -68,7 +77,8 @@ export type MessagePart =
   | SourceUrlPart
   | StepStartPart
   | FilePart
-  | ImagePart;
+  | ImagePart
+  | QuestionPart;
 
 export interface ToolMetadata {
   title?: string;

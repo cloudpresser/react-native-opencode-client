@@ -82,10 +82,19 @@ export interface ChatMessageToolCall {
   title?: string;
 }
 
+export interface ChatQuestion {
+  id: string;
+  text: string;
+  kind: 'text' | 'confirm' | 'select' | 'multi-select';
+  options?: string[];
+  default?: any;
+}
+
 export interface ChatMessagePart {
-  type: 'text' | 'tool-call' | 'reasoning';
+  type: 'text' | 'tool-call' | 'reasoning' | 'question';
   content?: string;
   toolCall?: ChatMessageToolCall;
+  question?: ChatQuestion;
 }
 
 export interface ChatMessage {
