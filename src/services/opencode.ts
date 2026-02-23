@@ -1,4 +1,4 @@
-import { Server, Session, GitFile, Agent } from '../types';
+import { Server, Session, GitFile, Project, FileNode, Agent } from '../types';
 import EventSource from 'react-native-sse';
 import base64 from 'base-64';
 
@@ -101,6 +101,8 @@ export interface Message {
 // Raw API session shape (different from our local Session type)
 interface ApiSession {
   id: string;
+  projectID?: string;
+  directory?: string;
   title: string;
   time: {
     created: number;
@@ -108,6 +110,36 @@ interface ApiSession {
   };
   version?: string;
   parentID?: string;
+}
+
+// Raw API project shape
+interface ApiProject {
+  id: string;
+  worktree: string;
+  vcsDir?: string;
+  vcs?: 'git';
+  time: {
+    created: number;
+    initialized?: number;
+  };
+}
+
+// Raw API path shape
+interface ApiPath {
+  home: string;
+  directory: string;
+  state?: string;
+  config?: string;
+  worktree?: string;
+}
+
+// Raw API file node shape
+interface ApiFileNode {
+  name: string;
+  path: string;
+  absolute: string;
+  type: 'file' | 'directory';
+  ignored: boolean;
 }
 
 interface FileDiff {
@@ -128,9 +160,14 @@ export class OpenCodeService {
     this.password = server.apiKey;
   }
 
-  async getSessions(): Promise<Session[]> {
+  async getSessions(directory?: string): Promise<Session[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/session`, {
+      const params = new URLSearchParams();
+      if (directory) params.append('directory', directory);
+      const queryString = params.toString();
+      const url = `${this.baseUrl}/session${queryString ? `?${queryString}` : ''}`;
+
+      const response = await fetch(url, {
         headers: this.getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch sessions');
@@ -140,6 +177,9 @@ export class OpenCodeService {
       return data.map(apiSession => ({
         id: apiSession.id,
         serverId: '', // Will be set by the caller
+        projectId: apiSession.projectID,
+        directory: apiSession.directory,
+        parentId: apiSession.parentID,
         title: apiSession.title,
         createdAt: apiSession.time?.created
           ? new Date(apiSession.time.created).toISOString()
@@ -168,9 +208,14 @@ export class OpenCodeService {
     }
   }
 
-  async createSession(title: string): Promise<Session | null> {
+  async createSession(title: string, directory?: string): Promise<Session | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/session`, {
+      const params = new URLSearchParams();
+      if (directory) params.append('directory', directory);
+      const queryString = params.toString();
+      const url = `${this.baseUrl}/session${queryString ? `?${queryString}` : ''}`;
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ title }),
@@ -514,6 +559,88 @@ export class OpenCodeService {
       return response.json();
     } catch (error) {
       console.error('Error searching text:', error);
+      return [];
+    }
+  }
+
+  async getProjects(): Promise<Project[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/project`, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch projects');
+      const data: ApiProject[] = await response.json();
+      return data.map(apiProject => ({
+        id: apiProject.id,
+        serverId: '', // Will be set by the caller
+        worktree: apiProject.worktree,
+        vcs: apiProject.vcs,
+        vcsDir: apiProject.vcsDir,
+        createdAt: apiProject.time?.created
+          ? new Date(apiProject.time.created * 1000).toISOString()
+          : undefined,
+        initializedAt: apiProject.time?.initialized
+          ? new Date(apiProject.time.initialized * 1000).toISOString()
+          : undefined,
+      }));
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      return [];
+    }
+  }
+
+  async getPath(directory?: string): Promise<ApiPath | null> {
+    try {
+      const params = new URLSearchParams();
+      if (directory) params.append('directory', directory);
+      const queryString = params.toString();
+      const url = `${this.baseUrl}/path${queryString ? `?${queryString}` : ''}`;
+
+      const response = await fetch(url, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch path');
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching path:', error);
+      return null;
+    }
+  }
+
+  async listFiles(directory: string, path: string = '.'): Promise<FileNode[]> {
+    try {
+      const params = new URLSearchParams();
+      params.append('directory', directory);
+      params.append('path', path);
+      const url = `${this.baseUrl}/file?${params.toString()}`;
+
+      const response = await fetch(url, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to list files');
+      return response.json();
+    } catch (error) {
+      console.error('Error listing files:', error);
+      return [];
+    }
+  }
+
+  async findDirectories(directory: string, query: string, limit: number = 50): Promise<string[]> {
+    try {
+      const params = new URLSearchParams();
+      params.append('directory', directory);
+      params.append('query', query);
+      params.append('type', 'directory');
+      params.append('limit', limit.toString());
+      const url = `${this.baseUrl}/find/file?${params.toString()}`;
+
+      const response = await fetch(url, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to find directories');
+      return response.json();
+    } catch (error) {
+      console.error('Error finding directories:', error);
       return [];
     }
   }

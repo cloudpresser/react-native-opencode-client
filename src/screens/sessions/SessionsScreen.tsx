@@ -14,10 +14,15 @@ import { withUniwind } from 'uniwind';
 import { useStore } from '../../store';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
-import { Session } from '../../types';
+import { Session, Project } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
 import { OpenCodeService } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
+
+function getDirectoryBasename(worktree: string): string {
+  const parts = worktree.replace(/\/+$/, '').split('/');
+  return parts[parts.length - 1] || worktree;
+}
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Sessions'>;
 type SessionsRouteProp = RouteProp<RootStackParamList, 'Sessions'>;
@@ -26,11 +31,16 @@ export default function SessionsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<SessionsRouteProp>();
   const colors = useThemeColors();
-  const { server } = route.params;
+  const { server, project } = route.params;
   
   const { sessions, addSession, deleteSession, selectSession, loadSessions } = useStore();
   const [loading, setLoading] = useState(false);
+  const [showSubAgents, setShowSubAgents] = useState(false);
   const [service] = useState(() => new OpenCodeService(server));
+
+  const headerTitle = project
+    ? getDirectoryBasename(project.worktree)
+    : 'All Sessions';
 
   useEffect(() => {
     loadSessionsFromServer();
@@ -39,7 +49,7 @@ export default function SessionsScreen() {
   const loadSessionsFromServer = async () => {
     setLoading(true);
     try {
-      const remoteSessions = await service.getSessions();
+      const remoteSessions = await service.getSessions(project?.worktree);
       
       await loadSessions(server.id);
       
@@ -123,16 +133,30 @@ export default function SessionsScreen() {
         >
           <Text className="text-base text-primary">← Back</Text>
         </TouchableOpacity>
-        <View className="items-center">
-          <Text className="text-xl font-bold text-text">{server.name}</Text>
-          <Text className="text-xs text-text-muted">Sessions</Text>
+        <View className="flex-1 items-center mx-3">
+          <Text className="text-xl font-bold text-text" numberOfLines={1}>{headerTitle}</Text>
+          <Text className="text-xs text-text-muted" numberOfLines={1}>{server.name}</Text>
         </View>
         <TouchableOpacity 
           className="bg-primary px-4 py-2 rounded-lg"
-          onPress={() => navigation.navigate('NewSession', { server })}
+          onPress={() => navigation.navigate('NewSession', { server, project })}
           testID="create-session-btn"
         >
-          <Text className="text-white font-semibold">+ New</Text>
+          <Text className="text-white font-semibold">New</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Sub-agent toggle */}
+      <View className="flex-row items-center justify-between px-4 py-2 bg-surface border-b border-border">
+        <Text className="text-sm text-text-muted">Show sub-agent sessions</Text>
+        <TouchableOpacity
+          className={`px-3 py-1 rounded-full ${showSubAgents ? 'bg-primary' : 'bg-border'}`}
+          onPress={() => setShowSubAgents(!showSubAgents)}
+          testID="toggle-subagents-btn"
+        >
+          <Text className={`text-xs font-semibold ${showSubAgents ? 'text-white' : 'text-text-muted'}`}>
+            {showSubAgents ? 'ON' : 'OFF'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -142,7 +166,9 @@ export default function SessionsScreen() {
         </View>
       ) : (
         <FlatList
-          data={[...new Map(sessions.map(s => [s.id, s])).values()].sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime())}
+          data={[...new Map(sessions.map(s => [s.id, s])).values()]
+            .filter(s => showSubAgents || !s.parentId)
+            .sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime())}
           renderItem={renderSession}
           keyExtractor={(item: Session) => item.id}
           contentContainerClassName="p-4"

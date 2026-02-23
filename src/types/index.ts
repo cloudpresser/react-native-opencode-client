@@ -46,9 +46,31 @@ export interface Server {
 export interface Session {
   id: string;
   serverId: string;
+  projectId?: string;
+  directory?: string;
+  parentId?: string;
   title: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface Project {
+  id?: string;
+  serverId: string;
+  worktree: string;
+  name?: string;
+  vcs?: 'git';
+  vcsDir?: string;
+  createdAt?: string;
+  initializedAt?: string;
+}
+
+export interface FileNode {
+  name: string;
+  path: string;
+  absolute: string;
+  type: 'file' | 'directory';
+  ignored: boolean;
 }
 
 export interface ChatMessageToolCall {

@@ -26,7 +26,7 @@ export default function NewSessionScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<NewSessionRouteProp>();
   const colors = useThemeColors();
-  const { server } = route.params;
+  const { server, project } = route.params;
   
   const { addSession } = useStore();
   const [newSessionTitle, setNewSessionTitle] = useState('');
@@ -41,7 +41,7 @@ export default function NewSessionScreen() {
 
     setLoading(true);
     try {
-      const remoteSession = await service.createSession(newSessionTitle);
+      const remoteSession = await service.createSession(newSessionTitle, project?.worktree);
       
       if (remoteSession) {
         const session: Session = {
