@@ -62,25 +62,14 @@ export default function SelectDirectoryScreen() {
     })();
   }, []);
 
-  // Resolve a target directory into the API's { directory, path } params.
-  // The OpenCode file.list API uses `directory` as a filesystem root
-  // and `path` as a relative path within it (matching the web client pattern).
-  const scopeDirectory = (target: string): { directory: string; path: string } => {
-    const trimmed = target.replace(/\/+$/, '') || '/';
-    if (trimmed === '/') {
-      return { directory: '/', path: '' };
-    }
-    // Use root '/' as the base and the rest as relative path
-    return { directory: '/', path: trimmed.slice(1) };
-  };
-
   const loadEntries = async (directory: string) => {
     setLoading(true);
     setSearchResults(null);
     setSearchQuery('');
     try {
-      const { directory: dir, path } = scopeDirectory(directory);
-      const files = await service.listFiles(dir, path);
+      // The OpenCode file.list API takes `directory` as the directory to list.
+      // Pass the target directory directly — no path splitting needed.
+      const files = await service.listFiles(directory);
       // Only show directories, sorted alphabetically, hide hidden dirs
       const dirs = files
         .filter(f => f.type === 'directory' && !f.name.startsWith('.'))
@@ -124,8 +113,8 @@ export default function SelectDirectoryScreen() {
     }
     setSearching(true);
     try {
-      // Use '/' as directory root for broadest search, matching the web client
-      const results = await service.findDirectories('/', query);
+      // Search within the current directory
+      const results = await service.findDirectories(currentDirectory, query);
       setSearchResults(results);
     } catch (error) {
       console.error('Error searching:', error);
@@ -133,7 +122,7 @@ export default function SelectDirectoryScreen() {
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [currentDirectory]);
 
   const handleSelectDirectory = useCallback(async (directory: string) => {
     const normalized = directory.replace(/\/+$/, '') || '/';
