@@ -129,6 +129,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [streamingText, setStreamingText] = useState('');
+  const [streamingQuestion, setStreamingQuestion] = useState<any | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
@@ -350,6 +351,17 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             streamedText += delta;
             setStreamingText(streamedText);
           },
+          onPartUpdated: (part) => {
+            if (part.type === 'question') {
+              setStreamingQuestion({
+                id: part.questionId,
+                text: part.text,
+                kind: part.kind,
+                options: part.options,
+                default: part.default,
+              });
+            }
+          },
           onComplete: async () => {
             // Fetch final messages from server to get rich parts
             // (tool calls, reasoning blocks, attachments, etc.)
@@ -382,6 +394,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   };
 
   const handleAnswerQuestion = async (questionId: string, answer: any) => {
+    setStreamingQuestion(null);
     const answerText = typeof answer === 'string' ? answer : JSON.stringify(answer);
     
     const userMessage: ChatMessage = {
@@ -405,6 +418,17 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           onTextDelta: (delta) => {
             streamedText += delta;
             setStreamingText(streamedText);
+          },
+          onPartUpdated: (part) => {
+            if (part.type === 'question') {
+              setStreamingQuestion({
+                id: part.questionId,
+                text: part.text,
+                kind: part.kind,
+                options: part.options,
+                default: part.default,
+              });
+            }
           },
           onComplete: async () => {
             try {
@@ -620,13 +644,21 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           </View>
         }
         ListFooterComponent={
-          streamingText ? (
-            <View className="self-start w-full py-2" testID="streaming-message">
-              <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
-              <MarkdownRenderer content={streamingText} />
-              <StyledActivityIndicator className="mt-2" />
-            </View>
-          ) : null
+          <View>
+            {streamingText ? (
+              <View className="self-start w-full py-2" testID="streaming-message">
+                <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
+                <MarkdownRenderer content={streamingText} />
+                {!streamingQuestion && <StyledActivityIndicator className="mt-2" />}
+              </View>
+            ) : null}
+            {streamingQuestion && (
+              <QuestionDisplay
+                question={streamingQuestion}
+                onAnswer={(answer) => handleAnswerQuestion(streamingQuestion.id, answer)}
+              />
+            )}
+          </View>
         }
         refreshControl={
           <RefreshControl
