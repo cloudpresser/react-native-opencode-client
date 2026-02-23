@@ -1,3 +1,12 @@
+## [2.8.6](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.5...v2.8.6) (2026-02-23)
+
+
+### Bug Fixes
+
+* fetch agents from server and pass agentID in messages ([#6](https://github.com/cloudpresser/react-native-opencode-client/issues/6)) ([d48a41c](https://github.com/cloudpresser/react-native-opencode-client/commit/d48a41c7e1147677a1e43aa88703f5fb271d9ed8))
+* navigate to session detail after creation ([#8](https://github.com/cloudpresser/react-native-opencode-client/issues/8)) ([8181a05](https://github.com/cloudpresser/react-native-opencode-client/commit/8181a057e67884c787701a90b4a43b6a3b3d718a))
+* sort sessions by most recently updated ([#7](https://github.com/cloudpresser/react-native-opencode-client/issues/7)) ([57afc37](https://github.com/cloudpresser/react-native-opencode-client/commit/57afc37951422371865c7c9f099768ce3cbe2889))
+
 ## [2.8.5](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.4...v2.8.5) (2026-02-22)
 
 
