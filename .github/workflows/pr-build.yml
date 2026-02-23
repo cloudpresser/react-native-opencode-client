@@ -55,6 +55,14 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Pick random theme
+        id: theme
+        run: |
+          THEMES=($(ls src/themes/*.json | xargs -I{} basename {} .json))
+          SELECTED=${THEMES[$RANDOM % ${#THEMES[@]}]}
+          echo "name=$SELECTED" >> $GITHUB_OUTPUT
+          echo "Selected theme: $SELECTED"
+
       - name: Generate native fingerprint
         id: fingerprint
         run: |
@@ -120,7 +128,7 @@ jobs:
         run: ./gradlew :app:assembleRelease
         working-directory: android
         env:
-          THEME: tokyo-night-dark
+          THEME: ${{ steps.theme.outputs.name }}
 
       - name: Collect APK
         run: |
@@ -146,5 +154,6 @@ jobs:
 
             - **Artifact:** `pr-apk-${{ github.event.pull_request.number }}`
             - **Commit:** `${{ github.event.pull_request.head.sha }}`
+            - **Theme:** `${{ steps.theme.outputs.name }}`
             - **Native fingerprint:** `${{ steps.fingerprint.outputs.hash }}`
             - **Expires:** 14 days
