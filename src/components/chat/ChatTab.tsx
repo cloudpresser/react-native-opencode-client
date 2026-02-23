@@ -515,7 +515,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-background"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       testID="chat-tab"
     >
