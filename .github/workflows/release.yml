@@ -109,25 +109,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Cache EAS local builds
-        uses: actions/cache@v4
-        with:
-          path: ~/.eas-build-local
-          key: ${{ runner.os }}-eas-build-local-${{ steps.fingerprint.outputs.hash }}
-          restore-keys: |
-            ${{ runner.os }}-eas-build-local-
-
-      - name: Cache Android prebuild
-        uses: actions/cache@v4
-        with:
-          path: |
-            android/.gradle
-            android/app/build
-            android/build
-          key: ${{ runner.os }}-android-prebuild-${{ steps.fingerprint.outputs.hash }}
-          restore-keys: |
-            ${{ runner.os }}-android-prebuild-
-
       - name: Generate signing keystore
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
