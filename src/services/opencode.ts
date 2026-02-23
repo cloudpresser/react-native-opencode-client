@@ -1,4 +1,4 @@
-import { Server, Session, GitFile, Project, FileNode } from '../types';
+import { Server, Session, GitFile, Project, FileNode, Agent } from '../types';
 import EventSource from 'react-native-sse';
 import base64 from 'base-64';
 
@@ -182,14 +182,28 @@ export class OpenCodeService {
         parentId: apiSession.parentID,
         title: apiSession.title,
         createdAt: apiSession.time?.created
-          ? new Date(apiSession.time.created * 1000).toISOString()
+          ? new Date(apiSession.time.created).toISOString()
           : new Date().toISOString(),
         updatedAt: apiSession.time?.updated
-          ? new Date(apiSession.time.updated * 1000).toISOString()
+          ? new Date(apiSession.time.updated).toISOString()
           : undefined,
       }));
     } catch (error) {
       console.error('Error fetching sessions:', error);
+      return [];
+    }
+  }
+
+  async getAgents(): Promise<Agent[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent`, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch agents');
+      const data: Agent[] = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching agents:', error);
       return [];
     }
   }
@@ -274,7 +288,8 @@ export class OpenCodeService {
     sessionId: string,
     message: string,
     attachments?: Array<{ type: string; content: string; name: string; mimeType?: string }>,
-    onChunk?: (text: string) => void
+    onChunk?: (text: string) => void,
+    agentId?: string
   ): Promise<string> {
     try {
       // Prepare message parts
@@ -305,10 +320,15 @@ export class OpenCodeService {
       }
 
       // Send message to OpenCode server
+      const body: Record<string, any> = { parts };
+      if (agentId) {
+        body.agentID = agentId;
+      }
+
       const response = await fetch(`${this.baseUrl}/session/${sessionId}/message`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify({ parts }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) throw new Error('Failed to send message');
@@ -334,99 +354,125 @@ export class OpenCodeService {
     }
   }
 
+  /**
+   * Send a message and stream the response via SSE events.
+   *
+   * Connects to GET /event, waits for server.connected, then sends the
+   * prompt via POST /session/{id}/prompt_async. Streams incremental text
+   * deltas and resolves when the session goes idle.
+   */
   async streamMessage(
     sessionId: string,
     message: string,
     attachments?: Array<{ type: string; content: string; name: string; mimeType?: string }>,
-    onChunk?: (text: string) => void
-  ): Promise<string> {
-    try {
-      // Prepare message parts
-      const parts: MessagePart[] = [
-        {
-          type: 'text',
-          text: message,
-        }
-      ];
+    callbacks?: {
+      onTextDelta?: (delta: string) => void;
+      onPartUpdated?: (part: any) => void;
+      onComplete?: () => void;
+    },
+    agentId?: string
+  ): Promise<void> {
+    // Prepare message parts
+    const parts: MessagePart[] = [
+      {
+        type: 'text',
+        text: message,
+      }
+    ];
 
-      // Add attachments
-      if (attachments && attachments.length > 0) {
-        for (const attachment of attachments) {
-          if (attachment.type === 'image') {
-            parts.push({
-              type: 'image',
-              image: attachment.content,
-            });
-          } else {
-            parts.push({
-              type: 'file',
-              data: attachment.content,
-              mimeType: attachment.mimeType || 'text/plain',
-            });
-          }
+    if (attachments && attachments.length > 0) {
+      for (const attachment of attachments) {
+        if (attachment.type === 'image') {
+          parts.push({
+            type: 'image',
+            image: attachment.content,
+          });
+        } else {
+          parts.push({
+            type: 'file',
+            data: attachment.content,
+            mimeType: attachment.mimeType || 'text/plain',
+          });
         }
       }
-
-      // Use SSE endpoint for streaming
-      const eventSource = new EventSource(
-        `${this.baseUrl}/event`,
-        {
-          headers: this.getHeaders() as any,
-        }
-      );
-
-      let fullResponse = '';
-
-      return new Promise((resolve, reject) => {
-        // First, send the message asynchronously
-        fetch(`${this.baseUrl}/session/${sessionId}/prompt_async`, {
-          method: 'POST',
-          headers: this.getHeaders(),
-          body: JSON.stringify({ parts }),
-        }).catch(reject);
-
-        eventSource.addEventListener('message', (event: any) => {
-          try {
-            const data = JSON.parse(event.data);
-            
-            // Check if this event is for our session
-            if (data.sessionID === sessionId && data.type === 'text') {
-              const chunk = data.text || '';
-              fullResponse += chunk;
-              if (onChunk) {
-                onChunk(chunk);
-              }
-            }
-            
-            // Check if message is complete
-            if (data.done) {
-              eventSource.close();
-              resolve(fullResponse);
-            }
-          } catch (err) {
-            console.error('Error parsing event:', err);
-          }
-        });
-
-        eventSource.addEventListener('error', (error: any) => {
-          console.error('EventSource error:', error);
-          eventSource.close();
-          // Fallback to non-streaming if SSE fails
-          this.sendMessage(sessionId, message, attachments, onChunk)
-            .then(resolve)
-            .catch(reject);
-        });
-
-        // Timeout after 5 minutes
-        setTimeout(() => {
-          eventSource.close();
-          resolve(fullResponse || 'Request timed out');
-        }, 300000);
-      });
-    } catch (error) {
-      console.error('Error streaming message:', error);
-      throw error;
     }
+
+    // Connect to SSE event stream
+    const eventSource = new EventSource(
+      `${this.baseUrl}/event`,
+      {
+        headers: this.getHeaders() as any,
+      }
+    );
+
+    return new Promise<void>((resolve, reject) => {
+      let prompted = false;
+
+      eventSource.addEventListener('message', (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Once connected, send the prompt
+          if (data.type === 'server.connected' && !prompted) {
+            prompted = true;
+            const asyncBody: Record<string, any> = { parts };
+            if (agentId) {
+              asyncBody.agentID = agentId;
+            }
+            fetch(`${this.baseUrl}/session/${sessionId}/prompt_async`, {
+              method: 'POST',
+              headers: this.getHeaders(),
+              body: JSON.stringify(asyncBody),
+            }).catch((err) => {
+              console.error('Error sending prompt_async:', err);
+              eventSource.close();
+              reject(err);
+            });
+            return;
+          }
+
+          // Incremental text delta from assistant
+          if (data.type === 'message.part.updated') {
+            const part = data.properties?.part;
+            const delta = data.properties?.delta;
+
+            if (part?.sessionID === sessionId) {
+              if (delta && (part.type === 'text' || part.type === 'reasoning')) {
+                callbacks?.onTextDelta?.(delta);
+              }
+              callbacks?.onPartUpdated?.(part);
+            }
+            return;
+          }
+
+          // Session went idle — agent is done
+          if (data.type === 'session.status') {
+            const props = data.properties;
+            if (props?.sessionID === sessionId && props?.status?.type === 'idle') {
+              eventSource.close();
+              callbacks?.onComplete?.();
+              resolve();
+            }
+            return;
+          }
+        } catch (err) {
+          console.error('Error parsing SSE event:', err);
+        }
+      });
+
+      eventSource.addEventListener('error', (error: any) => {
+        console.error('EventSource error:', error);
+        eventSource.close();
+        reject(error);
+      });
+
+      // Timeout after 10 minutes
+      setTimeout(() => {
+        eventSource.close();
+        callbacks?.onComplete?.();
+        resolve();
+      }, 600000);
+    });
   }
 
   async getMessages(sessionId: string, limit?: number, before?: string): Promise<Message[]> {

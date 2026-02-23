@@ -168,7 +168,7 @@ export default function SessionsScreen() {
         <FlatList
           data={[...new Map(sessions.map(s => [s.id, s])).values()]
             .filter(s => showSubAgents || !s.parentId)
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
+            .sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime())}
           renderItem={renderSession}
           keyExtractor={(item: Session) => item.id}
           contentContainerClassName="p-4"

@@ -11,14 +11,16 @@ import {
   RefreshControl,
   Modal,
   Pressable,
-  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
-import { ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
+import { Agent, ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
 import { OpenCodeService, Message as ApiMessage, ToolMetadata } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import MarkdownRenderer from './MarkdownRenderer';
@@ -117,14 +119,44 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
-  const [selectedAgent, setSelectedAgent] = useState<string>('coder');
+  const [selectedAgent, setSelectedAgent] = useState<string>('build');
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
 
-  const AGENTS = [
-    { id: 'coder', label: 'Coder', description: 'Default coding agent' },
-    { id: 'task', label: 'Task', description: 'Task-oriented agent' },
-    { id: 'explore', label: 'Explore', description: 'Codebase exploration' },
-  ];
+  useEffect(() => {
+    const loadAgents = async () => {
+      try {
+        setAgentsLoading(true);
+        const fetchedAgents = await service.getAgents();
+        // Show only non-hidden primary agents in the picker
+        const primaryAgents = fetchedAgents.filter(
+          (a) => a.mode === 'primary' && !a.hidden
+        );
+        setAgents(primaryAgents);
+        // Default to first primary agent if current selection isn't in the list
+        if (primaryAgents.length > 0 && !primaryAgents.find((a) => a.name === selectedAgent)) {
+          setSelectedAgent(primaryAgents[0].name);
+        }
+      } catch (error) {
+        console.error('Error loading agents:', error);
+      } finally {
+        setAgentsLoading(false);
+      }
+    };
+    loadAgents();
+  }, [service]);
+
+  // Auto-scroll to bottom when keyboard opens
+  useEffect(() => {
+    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(event, () => {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    return () => sub.remove();
+  }, []);
 
   const sessionMessages = messages[session.id] || [];
   const canLoadMore = hasMoreMessages[session.id] ?? true;
@@ -254,10 +286,11 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const handleSend = async () => {
     if (!input.trim() && attachments.length === 0) return;
 
+    const messageText = input;
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: messageText,
       attachments: attachments.length > 0 ? [...attachments] : undefined,
       timestamp: new Date().toISOString(),
     };
@@ -267,6 +300,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     const currentAttachments = [...attachments];
     setAttachments([]);
     setLoading(true);
+    setStreamingText('');
 
     try {
       const preparedAttachments = await Promise.all(
@@ -292,33 +326,45 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         })
       );
 
-      let fullResponse = '';
-      setStreamingText('');
+      let streamedText = '';
 
-      await service.sendMessage(
+      await service.streamMessage(
         session.id,
-        input,
+        messageText,
         preparedAttachments.length > 0 ? preparedAttachments : undefined,
-        (chunk) => {
-          fullResponse += chunk;
-          setStreamingText(fullResponse);
-        }
+        {
+          onTextDelta: (delta) => {
+            streamedText += delta;
+            setStreamingText(streamedText);
+          },
+          onComplete: async () => {
+            // Fetch final messages from server to get rich parts
+            // (tool calls, reasoning blocks, attachments, etc.)
+            try {
+              const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+              const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+              setMessages(session.id, chatMessages);
+            } catch (err) {
+              console.error('Error fetching final messages:', err);
+            }
+          },
+        },
+        selectedAgent
       );
 
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: fullResponse,
-        timestamp: new Date().toISOString(),
-      };
-
-      addMessage(session.id, assistantMessage);
       setStreamingText('');
     } catch (error) {
       console.error('Error sending message:', error);
+      // On SSE failure, try to reload messages from server
+      try {
+        const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+        const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+        setMessages(session.id, chatMessages);
+      } catch (_) {}
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setLoading(false);
+      setStreamingText('');
     }
   };
 
@@ -479,7 +525,12 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   }
 
   return (
-    <View className="flex-1 bg-background" testID="chat-tab">
+    <KeyboardAvoidingView
+      className="flex-1 bg-background"
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 120}
+      testID="chat-tab"
+    >
       <FlatList
         ref={flatListRef}
         data={sessionMessages}
@@ -529,14 +580,20 @@ keyExtractor={(item: MessageAttachment) => item.id}
         {/* Agent selector row */}
         <View className="flex-row items-center px-3 pt-2 pb-1">
           <Text className="text-text-subtle text-xs mr-2">Agent:</Text>
-          <TouchableOpacity
-            onPress={() => setShowAgentPicker(true)}
-            className="flex-row items-center bg-surface-elevated px-2.5 py-1 rounded-full border border-border"
-            testID="agent-selector"
-          >
-            <Text className="text-text text-xs font-medium">{AGENTS.find(a => a.id === selectedAgent)?.label ?? selectedAgent}</Text>
-            <Text className="text-text-muted text-[10px] ml-1">▼</Text>
-          </TouchableOpacity>
+          {agentsLoading ? (
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          ) : agents.length > 0 ? (
+            <TouchableOpacity
+              onPress={() => setShowAgentPicker(true)}
+              className="flex-row items-center bg-surface-elevated px-2.5 py-1 rounded-full border border-border"
+              testID="agent-selector"
+            >
+              <Text className="text-text text-xs font-medium">{agents.find(a => a.name === selectedAgent)?.name ?? selectedAgent}</Text>
+              <Text className="text-text-muted text-[10px] ml-1">▼</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text className="text-text-subtle text-xs">No agents available</Text>
+          )}
         </View>
 
         {/* Input row */}
@@ -565,21 +622,15 @@ keyExtractor={(item: MessageAttachment) => item.id}
             onChangeText={setInput}
             multiline
             maxLength={10000}
-            editable={!loading}
             testID="chat-input"
           />
 
           <TouchableOpacity
-            className={`rounded-full px-5 py-2.5 justify-center items-center ${loading ? 'bg-border-muted' : 'bg-primary'}`}
+            className="rounded-full px-5 py-2.5 justify-center items-center bg-primary"
             onPress={handleSend}
-            disabled={loading}
             testID="send-message-btn"
           >
-            {loading ? (
-              <ActivityIndicator color={colors.onPrimary} size="small" />
-            ) : (
-              <Text className="text-on-primary font-semibold">Send</Text>
-            )}
+            <Text className="text-on-primary font-semibold">Send</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -597,22 +648,24 @@ keyExtractor={(item: MessageAttachment) => item.id}
         >
           <View className="bg-surface rounded-t-2xl p-4 pb-8">
             <Text className="text-text font-semibold text-base mb-3">Select Agent</Text>
-            {AGENTS.map((agent) => (
+            {agents.map((agent) => (
               <TouchableOpacity
-                key={agent.id}
-                className={`flex-row items-center p-3 rounded-lg mb-1 ${selectedAgent === agent.id ? 'bg-primary/10 border border-primary' : 'border border-transparent'}`}
+                key={agent.name}
+                className={`flex-row items-center p-3 rounded-lg mb-1 ${selectedAgent === agent.name ? 'bg-primary/10 border border-primary' : 'border border-transparent'}`}
                 onPress={() => {
-                  setSelectedAgent(agent.id);
+                  setSelectedAgent(agent.name);
                   setShowAgentPicker(false);
                 }}
               >
                 <View className="flex-1">
-                  <Text className={`text-sm font-medium ${selectedAgent === agent.id ? 'text-primary' : 'text-text'}`}>
-                    {agent.label}
+                  <Text className={`text-sm font-medium ${selectedAgent === agent.name ? 'text-primary' : 'text-text'}`}>
+                    {agent.name}
                   </Text>
-                  <Text className="text-text-subtle text-xs">{agent.description}</Text>
+                  {agent.description && (
+                    <Text className="text-text-subtle text-xs">{agent.description}</Text>
+                  )}
                 </View>
-                {selectedAgent === agent.id && (
+                {selectedAgent === agent.name && (
                   <Text className="text-primary text-sm">✓</Text>
                 )}
               </TouchableOpacity>
@@ -620,6 +673,6 @@ keyExtractor={(item: MessageAttachment) => item.id}
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
