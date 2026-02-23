@@ -53,7 +53,7 @@ export default function NewSessionScreen() {
         };
         
         await addSession(session);
-        navigation.goBack();
+        navigation.replace('SessionDetail', { session, server });
       } else {
         Alert.alert('Error', 'Failed to create session on server');
       }
