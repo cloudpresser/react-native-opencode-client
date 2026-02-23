@@ -62,12 +62,25 @@ export default function SelectDirectoryScreen() {
     })();
   }, []);
 
+  // Resolve a target directory into the API's { directory, path } params.
+  // The OpenCode file.list API uses `directory` as a filesystem root
+  // and `path` as a relative path within it (matching the web client pattern).
+  const scopeDirectory = (target: string): { directory: string; path: string } => {
+    const trimmed = target.replace(/\/+$/, '') || '/';
+    if (trimmed === '/') {
+      return { directory: '/', path: '' };
+    }
+    // Use root '/' as the base and the rest as relative path
+    return { directory: '/', path: trimmed.slice(1) };
+  };
+
   const loadEntries = async (directory: string) => {
     setLoading(true);
     setSearchResults(null);
     setSearchQuery('');
     try {
-      const files = await service.listFiles(directory, '.');
+      const { directory: dir, path } = scopeDirectory(directory);
+      const files = await service.listFiles(dir, path);
       // Only show directories, sorted alphabetically, hide hidden dirs
       const dirs = files
         .filter(f => f.type === 'directory' && !f.name.startsWith('.'))
@@ -111,7 +124,8 @@ export default function SelectDirectoryScreen() {
     }
     setSearching(true);
     try {
-      const results = await service.findDirectories(currentDirectory, query);
+      // Use '/' as directory root for broadest search, matching the web client
+      const results = await service.findDirectories('/', query);
       setSearchResults(results);
     } catch (error) {
       console.error('Error searching:', error);
@@ -119,7 +133,7 @@ export default function SelectDirectoryScreen() {
     } finally {
       setSearching(false);
     }
-  }, [currentDirectory]);
+  }, []);
 
   const handleSelectDirectory = useCallback(async (directory: string) => {
     const normalized = directory.replace(/\/+$/, '') || '/';

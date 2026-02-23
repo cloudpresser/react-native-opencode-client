@@ -179,6 +179,7 @@ export class OpenCodeService {
         serverId: '', // Will be set by the caller
         projectId: apiSession.projectID,
         directory: apiSession.directory,
+        parentId: apiSession.parentID,
         title: apiSession.title,
         createdAt: apiSession.time?.created
           ? new Date(apiSession.time.created * 1000).toISOString()

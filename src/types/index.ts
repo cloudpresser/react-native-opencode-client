@@ -48,6 +48,7 @@ export interface Session {
   serverId: string;
   projectId?: string;
   directory?: string;
+  parentId?: string;
   title: string;
   createdAt: string;
   updatedAt?: string;

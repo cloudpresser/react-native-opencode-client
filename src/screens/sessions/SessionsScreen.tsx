@@ -35,6 +35,7 @@ export default function SessionsScreen() {
   
   const { sessions, addSession, deleteSession, selectSession, loadSessions } = useStore();
   const [loading, setLoading] = useState(false);
+  const [showSubAgents, setShowSubAgents] = useState(false);
   const [service] = useState(() => new OpenCodeService(server));
 
   const headerTitle = project
@@ -145,13 +146,29 @@ export default function SessionsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Sub-agent toggle */}
+      <View className="flex-row items-center justify-between px-4 py-2 bg-surface border-b border-border">
+        <Text className="text-sm text-text-muted">Show sub-agent sessions</Text>
+        <TouchableOpacity
+          className={`px-3 py-1 rounded-full ${showSubAgents ? 'bg-primary' : 'bg-border'}`}
+          onPress={() => setShowSubAgents(!showSubAgents)}
+          testID="toggle-subagents-btn"
+        >
+          <Text className={`text-xs font-semibold ${showSubAgents ? 'text-white' : 'text-text-muted'}`}>
+            {showSubAgents ? 'ON' : 'OFF'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
         <View className="flex-1 justify-center items-center" testID="loading-indicator">
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
-          data={[...new Map(sessions.map(s => [s.id, s])).values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
+          data={[...new Map(sessions.map(s => [s.id, s])).values()]
+            .filter(s => showSubAgents || !s.parentId)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
           renderItem={renderSession}
           keyExtractor={(item: Session) => item.id}
           contentContainerClassName="p-4"
