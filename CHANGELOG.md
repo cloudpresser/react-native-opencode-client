@@ -1,3 +1,18 @@
+# [2.9.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.7...v2.9.0) (2026-02-23)
+
+
+### Bug Fixes
+
+* remove ineffective EAS/prebuild caches, keep only Gradle cache ([eaff90a](https://github.com/cloudpresser/react-native-opencode-client/commit/eaff90afd830db18f6ae97565a2d0432c713d10c))
+
+
+### Features
+
+* add ADR and native fingerprint script for build caching ([8806a65](https://github.com/cloudpresser/react-native-opencode-client/commit/8806a65febba6f903127b7490d8a46235e0b2da0)), closes [#17](https://github.com/cloudpresser/react-native-opencode-client/issues/17)
+* add native build caching to PR and release workflows ([75455d1](https://github.com/cloudpresser/react-native-opencode-client/commit/75455d104b32b2cd9a0b606e630c8926090a032c))
+* randomize theme selection on each CI build ([4b5cfb9](https://github.com/cloudpresser/react-native-opencode-client/commit/4b5cfb9fc016bdcc788c55665196225f426eb19f))
+* replace EAS --local with direct prebuild+Gradle for full native caching ([9afb359](https://github.com/cloudpresser/react-native-opencode-client/commit/9afb359dfa154652a5043b6fd561e2f0123dd3fd))
+
 ## [2.8.7](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.6...v2.8.7) (2026-02-23)
 
 
