@@ -369,7 +369,7 @@ export class OpenCodeService {
    *
    * Connects to GET /event, waits for server.connected, then sends the
    * prompt via POST /session/{id}/prompt_async. Streams incremental text
-   * deltas and resolves when the session goes idle.
+   * deltas and resolves when the session goes idle or a question is pending.
    */
   async streamMessage(
     sessionId: string,
@@ -378,6 +378,7 @@ export class OpenCodeService {
     callbacks?: {
       onTextDelta?: (delta: string) => void;
       onPartUpdated?: (part: any) => void;
+      onQuestionPending?: (question: QuestionPart) => void;
       onComplete?: () => void;
     },
     agentId?: string
@@ -450,18 +451,32 @@ export class OpenCodeService {
               if (delta && (part.type === 'text' || part.type === 'reasoning')) {
                 callbacks?.onTextDelta?.(delta);
               }
+              // Detect question parts and surface them immediately
+              if (part.type === 'question') {
+                callbacks?.onQuestionPending?.({
+                  type: 'question',
+                  questionId: part.questionId,
+                  text: part.text,
+                  kind: part.kind,
+                  options: part.options,
+                  default: part.default,
+                });
+              }
               callbacks?.onPartUpdated?.(part);
             }
             return;
           }
 
-          // Session went idle — agent is done
+          // Session went idle or is waiting for user input (e.g. question)
           if (data.type === 'session.status') {
             const props = data.properties;
-            if (props?.sessionID === sessionId && props?.status?.type === 'idle') {
-              eventSource.close();
-              callbacks?.onComplete?.();
-              resolve();
+            if (props?.sessionID === sessionId) {
+              const statusType = props?.status?.type;
+              if (statusType === 'idle' || statusType === 'waiting') {
+                eventSource.close();
+                callbacks?.onComplete?.();
+                resolve();
+              }
             }
             return;
           }
