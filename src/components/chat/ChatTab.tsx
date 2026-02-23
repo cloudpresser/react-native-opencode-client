@@ -273,10 +273,11 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const handleSend = async () => {
     if (!input.trim() && attachments.length === 0) return;
 
+    const messageText = input;
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: messageText,
       attachments: attachments.length > 0 ? [...attachments] : undefined,
       timestamp: new Date().toISOString(),
     };
@@ -286,6 +287,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     const currentAttachments = [...attachments];
     setAttachments([]);
     setLoading(true);
+    setStreamingText('');
 
     try {
       const preparedAttachments = await Promise.all(
@@ -311,34 +313,45 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         })
       );
 
-      let fullResponse = '';
-      setStreamingText('');
+      let streamedText = '';
 
-      await service.sendMessage(
+      await service.streamMessage(
         session.id,
-        input,
+        messageText,
         preparedAttachments.length > 0 ? preparedAttachments : undefined,
-        (chunk) => {
-          fullResponse += chunk;
-          setStreamingText(fullResponse);
+        {
+          onTextDelta: (delta) => {
+            streamedText += delta;
+            setStreamingText(streamedText);
+          },
+          onComplete: async () => {
+            // Fetch final messages from server to get rich parts
+            // (tool calls, reasoning blocks, attachments, etc.)
+            try {
+              const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+              const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+              setMessages(session.id, chatMessages);
+            } catch (err) {
+              console.error('Error fetching final messages:', err);
+            }
+          },
         },
         selectedAgent
       );
 
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: fullResponse,
-        timestamp: new Date().toISOString(),
-      };
-
-      addMessage(session.id, assistantMessage);
       setStreamingText('');
     } catch (error) {
       console.error('Error sending message:', error);
+      // On SSE failure, try to reload messages from server
+      try {
+        const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+        const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+        setMessages(session.id, chatMessages);
+      } catch (_) {}
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setLoading(false);
+      setStreamingText('');
     }
   };
 
