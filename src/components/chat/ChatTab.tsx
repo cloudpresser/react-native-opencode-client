@@ -11,7 +11,9 @@ import {
   RefreshControl,
   Modal,
   Pressable,
-  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
@@ -145,6 +147,17 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     loadAgents();
   }, [service]);
 
+  // Auto-scroll to bottom when keyboard opens
+  useEffect(() => {
+    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(event, () => {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    return () => sub.remove();
+  }, []);
+
   const sessionMessages = messages[session.id] || [];
   const canLoadMore = hasMoreMessages[session.id] ?? true;
 
@@ -273,10 +286,11 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const handleSend = async () => {
     if (!input.trim() && attachments.length === 0) return;
 
+    const messageText = input;
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: messageText,
       attachments: attachments.length > 0 ? [...attachments] : undefined,
       timestamp: new Date().toISOString(),
     };
@@ -286,6 +300,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     const currentAttachments = [...attachments];
     setAttachments([]);
     setLoading(true);
+    setStreamingText('');
 
     try {
       const preparedAttachments = await Promise.all(
@@ -311,34 +326,45 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         })
       );
 
-      let fullResponse = '';
-      setStreamingText('');
+      let streamedText = '';
 
-      await service.sendMessage(
+      await service.streamMessage(
         session.id,
-        input,
+        messageText,
         preparedAttachments.length > 0 ? preparedAttachments : undefined,
-        (chunk) => {
-          fullResponse += chunk;
-          setStreamingText(fullResponse);
+        {
+          onTextDelta: (delta) => {
+            streamedText += delta;
+            setStreamingText(streamedText);
+          },
+          onComplete: async () => {
+            // Fetch final messages from server to get rich parts
+            // (tool calls, reasoning blocks, attachments, etc.)
+            try {
+              const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+              const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+              setMessages(session.id, chatMessages);
+            } catch (err) {
+              console.error('Error fetching final messages:', err);
+            }
+          },
         },
         selectedAgent
       );
 
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: fullResponse,
-        timestamp: new Date().toISOString(),
-      };
-
-      addMessage(session.id, assistantMessage);
       setStreamingText('');
     } catch (error) {
       console.error('Error sending message:', error);
+      // On SSE failure, try to reload messages from server
+      try {
+        const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+        const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+        setMessages(session.id, chatMessages);
+      } catch (_) {}
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setLoading(false);
+      setStreamingText('');
     }
   };
 
@@ -499,7 +525,12 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   }
 
   return (
-    <View className="flex-1 bg-background" testID="chat-tab">
+    <KeyboardAvoidingView
+      className="flex-1 bg-background"
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 120}
+      testID="chat-tab"
+    >
       <FlatList
         ref={flatListRef}
         data={sessionMessages}
@@ -591,21 +622,15 @@ keyExtractor={(item: MessageAttachment) => item.id}
             onChangeText={setInput}
             multiline
             maxLength={10000}
-            editable={!loading}
             testID="chat-input"
           />
 
           <TouchableOpacity
-            className={`rounded-full px-5 py-2.5 justify-center items-center ${loading ? 'bg-border-muted' : 'bg-primary'}`}
+            className="rounded-full px-5 py-2.5 justify-center items-center bg-primary"
             onPress={handleSend}
-            disabled={loading}
             testID="send-message-btn"
           >
-            {loading ? (
-              <ActivityIndicator color={colors.onPrimary} size="small" />
-            ) : (
-              <Text className="text-on-primary font-semibold">Send</Text>
-            )}
+            <Text className="text-on-primary font-semibold">Send</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -648,6 +673,6 @@ keyExtractor={(item: MessageAttachment) => item.id}
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

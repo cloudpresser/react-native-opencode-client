@@ -29,6 +29,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "adjustResize",
       "predictiveBackGestureEnabled": false
     },
     "web": {
