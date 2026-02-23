@@ -1,3 +1,14 @@
+## [2.8.7](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.6...v2.8.7) (2026-02-23)
+
+
+### Bug Fixes
+
+* allow queueing messages while agent is active ([#12](https://github.com/cloudpresser/react-native-opencode-client/issues/12)) ([c788f65](https://github.com/cloudpresser/react-native-opencode-client/commit/c788f653111039ffccf4a44f6dbe58b7d32910c3))
+* correct keyboard offset for Android and auto-scroll on keyboard open ([#13](https://github.com/cloudpresser/react-native-opencode-client/issues/13)) ([f4d7aae](https://github.com/cloudpresser/react-native-opencode-client/commit/f4d7aae9971af8b450bef22ecc3f747ec8b4cc81))
+* prevent keyboard from hiding input on Android ([#13](https://github.com/cloudpresser/react-native-opencode-client/issues/13)) ([ac2ea39](https://github.com/cloudpresser/react-native-opencode-client/commit/ac2ea390908c05eb869a56bbf04c526f46f16150))
+* stream messages via SSE instead of waiting for full response ([#14](https://github.com/cloudpresser/react-native-opencode-client/issues/14)) ([e7e1406](https://github.com/cloudpresser/react-native-opencode-client/commit/e7e14061bfe5af1f8982da7a265aaddece119b28))
+* use adjustResize and padding behavior for Android keyboard ([#13](https://github.com/cloudpresser/react-native-opencode-client/issues/13)) ([d23177a](https://github.com/cloudpresser/react-native-opencode-client/commit/d23177a2c3acb2ed66c00186c3eb9739f54d0841))
+
 ## [2.8.6](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.5...v2.8.6) (2026-02-23)
 
 
