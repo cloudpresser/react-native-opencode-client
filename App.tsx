@@ -8,6 +8,8 @@ import { withUniwind } from 'uniwind';
 
 const StyledView = withUniwind(View);
 import ServersScreen from './src/screens/servers/ServersScreen';
+import ProjectsScreen from './src/screens/projects/ProjectsScreen';
+import SelectDirectoryScreen from './src/screens/projects/SelectDirectoryScreen';
 import SessionsScreen from './src/screens/sessions/SessionsScreen';
 import SessionDetailScreen from './src/screens/session-detail/SessionDetailScreen';
 import AddEditServerScreen from './src/screens/servers/AddEditServerScreen';
@@ -34,6 +36,8 @@ export default function App() {
               }}
             >
               <Stack.Screen name="Servers" component={ServersScreen} />
+              <Stack.Screen name="Projects" component={ProjectsScreen} />
+              <Stack.Screen name="SelectDirectory" component={SelectDirectoryScreen} />
               <Stack.Screen name="Sessions" component={SessionsScreen} />
               <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
               <Stack.Screen name="AddEditServer" component={AddEditServerScreen} />

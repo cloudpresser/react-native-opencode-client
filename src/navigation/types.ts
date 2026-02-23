@@ -1,11 +1,13 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
-import { Server, Session, GitFile } from '../types';
+import { Server, Session, GitFile, Project } from '../types';
 
 export type RootStackParamList = {
   Servers: undefined;
   AddEditServer: { server?: Server };
-  Sessions: { server: Server };
-  NewSession: { server: Server };
+  Projects: { server: Server };
+  SelectDirectory: { server: Server };
+  Sessions: { server: Server; project?: Project };
+  NewSession: { server: Server; project?: Project };
   SessionDetail: { session: Session; server: Server };
   GitDiffViewer: { file: GitFile; session: Session; server: Server };
   ConnectionLogs: { serverId: string; serverName: string };

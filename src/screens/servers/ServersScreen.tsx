@@ -46,7 +46,7 @@ export default function ServersScreen() {
 
   const handleSelectServer = (server: Server) => {
     selectServer(server);
-    navigation.navigate('Sessions', { server });
+    navigation.navigate('Projects', { server });
   };
 
   const renderServer = ({ item }: { item: Server }): React.ReactElement => {
