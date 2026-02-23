@@ -610,21 +610,15 @@ keyExtractor={(item: MessageAttachment) => item.id}
             onChangeText={setInput}
             multiline
             maxLength={10000}
-            editable={!loading}
             testID="chat-input"
           />
 
           <TouchableOpacity
-            className={`rounded-full px-5 py-2.5 justify-center items-center ${loading ? 'bg-border-muted' : 'bg-primary'}`}
+            className="rounded-full px-5 py-2.5 justify-center items-center bg-primary"
             onPress={handleSend}
-            disabled={loading}
             testID="send-message-btn"
           >
-            {loading ? (
-              <ActivityIndicator color={colors.onPrimary} size="small" />
-            ) : (
-              <Text className="text-on-primary font-semibold">Send</Text>
-            )}
+            <Text className="text-on-primary font-semibold">Send</Text>
           </TouchableOpacity>
         </View>
       </View>
