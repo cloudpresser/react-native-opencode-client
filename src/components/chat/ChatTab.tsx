@@ -11,7 +11,8 @@ import {
   RefreshControl,
   Modal,
   Pressable,
-  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
@@ -512,7 +513,12 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   }
 
   return (
-    <View className="flex-1 bg-background" testID="chat-tab">
+    <KeyboardAvoidingView
+      className="flex-1 bg-background"
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      testID="chat-tab"
+    >
       <FlatList
         ref={flatListRef}
         data={sessionMessages}
@@ -661,6 +667,6 @@ keyExtractor={(item: MessageAttachment) => item.id}
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
