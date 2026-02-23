@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (revised 2026-02-23)
 
 ## Date
 
@@ -11,11 +11,11 @@ Accepted
 ## Context
 
 Our CI pipelines (`pr-build.yml` and `release.yml`) build an Android APK from scratch on
-every run using `eas build --local`. A full native build takes 10-15 minutes, dominated by
-Gradle compilation of native code (React Native, Hermes, native modules like
-`react-native-ssh-sftp`, Expo modules, etc.).
+every run. A full native build takes 15-25 minutes, dominated by Gradle compilation of
+native code (React Native New Architecture C++ codegen, Hermes, native modules like
+`react-native-ssh-sftp`, Expo modules, CMake builds for 4 ABIs).
 
-Most commits change only JavaScript/TypeScript source — the native layer is unchanged. We
+Most commits change only JavaScript/TypeScript source -- the native layer is unchanged. We
 need a strategy to skip redundant native compilation and only rebuild when native
 dependencies actually change.
 
@@ -49,7 +49,7 @@ Run JS bundles inside the Expo Go app or a pre-built development client.
 - **Pros**: No build step at all during development.
 - **Cons**: Expo Go cannot run custom native modules (`react-native-ssh-sftp`); dev
   builds still require an initial native build; not suitable for release distribution;
-  not applicable to CI — reviewers need a standalone APK.
+  not applicable to CI -- reviewers need a standalone APK.
 - **Verdict**: Not applicable. The app uses custom native modules that Expo Go cannot
   load.
 
@@ -63,67 +63,86 @@ Use EAS cloud builds which have their own caching layer.
   and control reasons.
 - **Verdict**: Viable but increases cost and reduces control. Not chosen for now.
 
-#### 4. Fingerprint-Based Gradle Cache on GitHub Actions (Chosen)
+#### 4. EAS Build `--local` with Gradle Cache (Initial Approach -- Rejected)
 
-Use `@expo/fingerprint` to hash the native dependency surface. Cache the Gradle build
-directory and `android/` prebuild output keyed by this fingerprint. On cache hit, the
-native compilation step is skipped (Gradle up-to-date checks pass). On cache miss, do a
-full build and populate the cache.
+Use `eas build --local` as before, but cache `~/.gradle/caches` keyed by a fingerprint.
 
-- **Pros**: Zero-cost (uses GitHub Actions cache); transparent and auditable; works with
-  existing `--local` build flow; reduces JS-only PR builds from ~12 min to ~3-4 min;
-  compatible with future App Store publishing.
-- **Cons**: GitHub Actions cache is limited to 10 GB per repo (old entries evicted via
-  LRU); first build after native dep change is still slow; fingerprint script adds a
-  small maintenance burden.
-- **Verdict**: Best fit for current requirements. Low risk, high reward.
+- **Pros**: Minimal workflow changes; caches Gradle dependency downloads (~1.3 GB).
+- **Cons**: EAS `--local` copies the project to a temp directory
+  (`/tmp/runner/eas-build-local-nodejs/<uuid>/build/`) and runs Gradle there. All
+  compiled native outputs (`.so` files, Kotlin class files, CMake artifacts) are
+  discarded after each run. Only dependency downloads in `~/.gradle/caches` survive.
+  Tested in CI: reduced build from 25m to 17m (31% improvement), but native
+  compilation still runs in full every time.
+- **Verdict**: Insufficient. The temp directory model fundamentally prevents caching
+  the expensive native compilation outputs.
+
+#### 5. Direct `expo prebuild` + Gradle (Chosen)
+
+Replace `eas build --local` with `npx expo prebuild --platform android` followed by
+`./gradlew :app:assembleRelease` directly in the workspace. Cache the full Gradle build
+output directory.
+
+- **Pros**: Builds happen in-place so `android/app/build/` persists between runs;
+  CMake `.so` files, Kotlin class files, C++ codegen outputs are all cacheable; removes
+  EAS CLI dependency; no `EXPO_TOKEN` needed for builds; full control over signing.
+- **Cons**: Must handle signing config ourselves (previously managed by EAS); lose EAS
+  `expo-doctor` pre-flight checks; must replicate `eas-build.gradle` signing file.
+- **Verdict**: Best fit. Solves the core caching problem.
 
 ## Decision
 
-We adopt **fingerprint-based native build caching** (option 4):
+We adopt **direct prebuild + Gradle with fingerprint-based caching** (option 5):
 
-1. **Fingerprint generation**: A script (`scripts/native-fingerprint.js`) uses
-   `@expo/fingerprint` to compute a hash of the project's native footprint — covering
+1. **Build process**: CI runs `npx expo prebuild --platform android --clean` to generate
+   the `android/` directory, then `./gradlew :app:assembleRelease` directly in the
+   workspace.
+
+2. **Fingerprint generation**: A script (`scripts/native-fingerprint.js`) uses
+   `@expo/fingerprint` to compute a hash of the project's native footprint -- covering
    `package.json` dependencies, `app.json` config, `eas.json`, native plugins, and
    Expo SDK version.
 
-2. **Cache key**: GitHub Actions `actions/cache` is keyed on
-   `${{ runner.os }}-native-build-${{ fingerprint }}`. This ensures the cache is
-   invalidated whenever native dependencies change.
+3. **Signing**: CI creates an `android/app/eas-build.gradle` file (the same file that
+   `expo prebuild` generates an `apply from` directive for) with the keystore path and
+   credentials. PR builds use an ephemeral keystore; release builds use the production
+   keystore from GitHub Secrets.
 
-3. **Cached artifacts**: The `~/.gradle/caches` and `~/.gradle/wrapper` directories
-   (Gradle build cache and wrapper distribution) are cached.
+4. **Two-tier caching**:
 
-   **Note**: EAS `--local` builds clone the project into a temp directory
-   (`/tmp/runner/eas-build-local-nodejs/<uuid>/build/`) and run Gradle there. This
-   means workspace-local paths like `android/.gradle` or `android/app/build` are NOT
-   reusable across runs. However, Gradle uses the global `~/.gradle/` directory for
-   dependency caches and build cache, so caching that directory is effective.
+   | Cache | Key | Contents |
+   |---|---|---|
+   | Gradle dependencies | `gradle-deps-${{ hashFiles('android/**/*.gradle*') }}` | `~/.gradle/caches`, `~/.gradle/wrapper` (downloaded JARs, AARs, Gradle distribution) |
+   | Native build outputs | `native-build-${{ fingerprint }}` | `android/.gradle`, `android/app/build`, `android/build` (compiled `.so`, `.class`, codegen, APK intermediates) |
 
-4. **Workflow behavior**:
-   - Cache hit: Gradle reuses cached dependency downloads and compiled outputs from
-     `~/.gradle/caches`. This eliminates redundant dependency resolution and can speed
-     up incremental compilation. Expected savings: ~3-8 min depending on cache warmth.
-   - Cache miss: Full native build runs (~12 min). Cache is populated for next run.
+   The dependency cache uses Gradle file hashes (changes when `build.gradle` files
+   change). The build output cache uses the native fingerprint (changes when any native
+   dependency changes). On fingerprint match, Gradle's up-to-date checks skip all native
+   compilation.
 
-5. **Scope**: Applied to `pr-build.yml` and `release.yml`. The legacy `eas-build.yml`
+5. **EAS CLI removed**: The `expo/expo-github-action` setup step and `EXPO_TOKEN`
+   environment variable are no longer needed for builds. This simplifies CI setup and
+   removes a third-party dependency from the build path.
+
+6. **Scope**: Applied to `pr-build.yml` and `release.yml`. The legacy `eas-build.yml`
    is left unchanged (it should be deprecated separately).
 
 ## Consequences
 
 ### Positive
 
-- JS-only PR builds drop from ~12 min to ~3-4 min.
+- JS-only PR builds drop from ~18 min to ~3-4 min (native compilation fully cached).
 - Release builds after JS-only changes are similarly faster.
 - No new services or paid plans required.
 - Cache invalidation is automatic and deterministic via `@expo/fingerprint`.
+- Removes EAS CLI dependency from CI build path.
 - Compatible with future iOS builds and App Store publishing.
 
 ### Negative
 
-- Adds `@expo/fingerprint` as a dev dependency.
-- GitHub Actions cache is limited to 10 GB per repo; large Gradle caches may cause
-  eviction of other caches.
+- Must maintain signing config generation in CI (previously handled by EAS).
+- GitHub Actions cache is limited to 10 GB per repo; native build outputs for 4 ABIs
+  can be 1-2 GB, which may cause eviction of other caches.
 - The fingerprint script must be maintained if the project's native surface changes
   in unusual ways (e.g., custom Gradle plugins not tracked by `@expo/fingerprint`).
 
@@ -131,14 +150,53 @@ We adopt **fingerprint-based native build caching** (option 4):
 
 - If `@expo/fingerprint` misses a native dependency change, a stale cache could
   produce a broken APK. Mitigation: the fingerprint library is maintained by Expo and
-  covers all standard Expo/RN native surfaces. Manual cache purge is available via
-  GitHub Actions UI.
+  covers all standard Expo/RN native surfaces. The native build output cache has no
+  `restore-keys` fallback, so a fingerprint change always triggers a full rebuild.
+  Manual cache purge is available via GitHub Actions UI.
+
+- `expo prebuild --clean` regenerates `android/` from scratch, which may overwrite
+  cached `android/app/build/` intermediate files. Gradle's incremental build should
+  handle this gracefully (rebuilds only what changed), but if issues arise, removing
+  `--clean` or adjusting the prebuild step may be needed.
 
 ## Future Considerations
 
-- **Expo OTA Updates**: Can be layered on top for post-release JS hotfixes, reducing
-  the need for full release cycles for minor JS fixes.
-- **iOS builds**: The same fingerprint strategy extends to iOS (cache `ios/Pods`,
-  `~/Library/Developer/Xcode/DerivedData`).
-- **Deprecate `eas-build.yml`**: The legacy workflow should be removed once `release.yml`
-  is proven stable.
+### Committing `android/` to version control
+
+Currently `android/` is gitignored. This means `expo prebuild --clean` regenerates it
+on every CI run (~30-60s), and the native build cache must include the full `android/`
+build output directory.
+
+**Tradeoffs of committing `android/`:**
+
+| Factor | Gitignored (current) | Committed |
+|---|---|---|
+| Repo size | Small (no native files) | Larger (+5-10 MB of generated files) |
+| CI prebuild step | Required every run (~30-60s) | Skippable (already exists) |
+| Cache effectiveness | Good (build outputs cached) | Better (no prebuild drift risk) |
+| Local dev consistency | Developers must run prebuild | Consistent across machines |
+| Expo SDK upgrades | Clean prebuild always uses latest templates | Must manually re-run prebuild and commit |
+| Merge conflicts | None (generated files not in git) | Possible in generated Gradle files |
+| Config plugin changes | Automatically reflected | Must re-run prebuild and commit |
+
+**Recommendation**: Keep `android/` gitignored for now. The current caching strategy
+works well, and the prebuild step is fast. Revisit if:
+- Multiple developers need consistent local Android builds
+- Prebuild drift causes cache invalidation issues
+- iOS builds are added to CI (same decision applies to `ios/`)
+
+### Expo OTA Updates
+
+Can be layered on top for post-release JS hotfixes, reducing the need for full release
+cycles for minor JS fixes. Requires adding `expo-updates` as a native dependency.
+
+### iOS builds
+
+The same fingerprint + direct build strategy extends to iOS:
+- `npx expo prebuild --platform ios --clean`
+- `xcodebuild` directly in the workspace
+- Cache `ios/Pods`, `ios/build`, `~/Library/Developer/Xcode/DerivedData`
+
+### Deprecate `eas-build.yml`
+
+The legacy workflow should be removed once `release.yml` is proven stable.
