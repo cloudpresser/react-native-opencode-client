@@ -1,4 +1,4 @@
-import { Server, Session, GitFile } from '../types';
+import { Server, Session, GitFile, Agent } from '../types';
 import EventSource from 'react-native-sse';
 import base64 from 'base-64';
 
@@ -154,6 +154,20 @@ export class OpenCodeService {
     }
   }
 
+  async getAgents(): Promise<Agent[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent`, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch agents');
+      const data: Agent[] = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+      return [];
+    }
+  }
+
   async createSession(title: string): Promise<Session | null> {
     try {
       const response = await fetch(`${this.baseUrl}/session`, {
@@ -229,7 +243,8 @@ export class OpenCodeService {
     sessionId: string,
     message: string,
     attachments?: Array<{ type: string; content: string; name: string; mimeType?: string }>,
-    onChunk?: (text: string) => void
+    onChunk?: (text: string) => void,
+    agentId?: string
   ): Promise<string> {
     try {
       // Prepare message parts
@@ -260,10 +275,15 @@ export class OpenCodeService {
       }
 
       // Send message to OpenCode server
+      const body: Record<string, any> = { parts };
+      if (agentId) {
+        body.agentID = agentId;
+      }
+
       const response = await fetch(`${this.baseUrl}/session/${sessionId}/message`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify({ parts }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) throw new Error('Failed to send message');
@@ -293,7 +313,8 @@ export class OpenCodeService {
     sessionId: string,
     message: string,
     attachments?: Array<{ type: string; content: string; name: string; mimeType?: string }>,
-    onChunk?: (text: string) => void
+    onChunk?: (text: string) => void,
+    agentId?: string
   ): Promise<string> {
     try {
       // Prepare message parts
@@ -334,10 +355,15 @@ export class OpenCodeService {
 
       return new Promise((resolve, reject) => {
         // First, send the message asynchronously
+        const asyncBody: Record<string, any> = { parts };
+        if (agentId) {
+          asyncBody.agentID = agentId;
+        }
+
         fetch(`${this.baseUrl}/session/${sessionId}/prompt_async`, {
           method: 'POST',
           headers: this.getHeaders(),
-          body: JSON.stringify({ parts }),
+          body: JSON.stringify(asyncBody),
         }).catch(reject);
 
         eventSource.addEventListener('message', (event: any) => {
