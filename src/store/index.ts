@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Server, Session, ChatMessage, GitFile, FileAnnotation } from '../types';
+import { Server, Session, ChatMessage, GitFile, FileAnnotation, Project } from '../types';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -18,6 +18,15 @@ interface AppState {
   deleteServer: (id: string) => Promise<void>;
   selectServer: (server: Server | null) => void;
   loadServers: () => Promise<void>;
+
+  // Projects
+  projects: Project[];
+  selectedProject: Project | null;
+  openProject: (project: Project) => Promise<void>;
+  closeProject: (serverId: string, worktree: string) => Promise<void>;
+  selectProject: (project: Project | null) => void;
+  enrichProjects: (serverId: string, apiProjects: Project[]) => Promise<void>;
+  loadProjects: (serverId: string) => Promise<void>;
 
   // Sessions
   sessions: Session[];
@@ -49,6 +58,7 @@ interface AppState {
 }
 
 const SERVERS_KEY = '@opencode_servers';
+const PROJECTS_KEY = '@opencode_projects';
 const SESSIONS_KEY = '@opencode_sessions';
 const MESSAGES_KEY = '@opencode_messages';
 const THEME_KEY = '@opencode_theme';
@@ -104,6 +114,57 @@ export const useStore = create<AppState>((set, get) => ({
     const data = await AsyncStorage.getItem(SERVERS_KEY);
     if (data) {
       set({ servers: JSON.parse(data) });
+    }
+  },
+
+  // Projects
+  projects: [],
+  selectedProject: null,
+
+  openProject: async (project: Project) => {
+    const existing = get().projects;
+    // Deduplicate by worktree + serverId
+    if (existing.find(p => p.worktree === project.worktree && p.serverId === project.serverId)) {
+      return;
+    }
+    const projects = [...existing, project];
+    set({ projects });
+    await AsyncStorage.setItem(`${PROJECTS_KEY}_${project.serverId}`, JSON.stringify(projects));
+  },
+
+  closeProject: async (serverId: string, worktree: string) => {
+    const projects = get().projects.filter(p => !(p.worktree === worktree && p.serverId === serverId));
+    set({ projects });
+    await AsyncStorage.setItem(`${PROJECTS_KEY}_${serverId}`, JSON.stringify(projects));
+  },
+
+  selectProject: (project: Project | null) => set({ selectedProject: project }),
+
+  enrichProjects: async (serverId: string, apiProjects: Project[]) => {
+    const current = get().projects;
+    const enriched = current.map(p => {
+      if (p.serverId !== serverId) return p;
+      const match = apiProjects.find(ap => ap.worktree === p.worktree);
+      if (!match) return p;
+      return {
+        ...p,
+        id: match.id,
+        vcs: match.vcs,
+        vcsDir: match.vcsDir,
+        createdAt: match.createdAt ?? p.createdAt,
+        initializedAt: match.initializedAt ?? p.initializedAt,
+      };
+    });
+    set({ projects: enriched });
+    await AsyncStorage.setItem(`${PROJECTS_KEY}_${serverId}`, JSON.stringify(enriched));
+  },
+
+  loadProjects: async (serverId: string) => {
+    const data = await AsyncStorage.getItem(`${PROJECTS_KEY}_${serverId}`);
+    if (data) {
+      set({ projects: JSON.parse(data) });
+    } else {
+      set({ projects: [] });
     }
   },
 
