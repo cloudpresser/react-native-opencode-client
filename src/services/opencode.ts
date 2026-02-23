@@ -142,10 +142,10 @@ export class OpenCodeService {
         serverId: '', // Will be set by the caller
         title: apiSession.title,
         createdAt: apiSession.time?.created
-          ? new Date(apiSession.time.created * 1000).toISOString()
+          ? new Date(apiSession.time.created).toISOString()
           : new Date().toISOString(),
         updatedAt: apiSession.time?.updated
-          ? new Date(apiSession.time.updated * 1000).toISOString()
+          ? new Date(apiSession.time.updated).toISOString()
           : undefined,
       }));
     } catch (error) {
