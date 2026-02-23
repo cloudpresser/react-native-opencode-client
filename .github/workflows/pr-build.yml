@@ -65,13 +65,41 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Generate native fingerprint
+        id: fingerprint
+        run: |
+          FINGERPRINT=$(node scripts/native-fingerprint.js --platform android)
+          echo "hash=$FINGERPRINT" >> $GITHUB_OUTPUT
+          echo "Native fingerprint: $FINGERPRINT"
+
+      - name: Cache Gradle build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ steps.fingerprint.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Cache EAS local builds
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.eas-build-local
-          key: ${{ runner.os }}-eas-build-local-${{ hashFiles('**/package.json') }}
+          key: ${{ runner.os }}-eas-build-local-${{ steps.fingerprint.outputs.hash }}
           restore-keys: |
             ${{ runner.os }}-eas-build-local-
+
+      - name: Cache Android prebuild
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/.gradle
+            android/app/build
+            android/build
+          key: ${{ runner.os }}-android-prebuild-${{ steps.fingerprint.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-android-prebuild-
 
       - name: Generate ephemeral signing keystore
         run: |
@@ -119,4 +147,5 @@ jobs:
 
             - **Artifact:** `pr-apk-${{ github.event.pull_request.number }}`
             - **Commit:** `${{ github.event.pull_request.head.sha }}`
+            - **Native fingerprint:** `${{ steps.fingerprint.outputs.hash }}`
             - **Expires:** 14 days
