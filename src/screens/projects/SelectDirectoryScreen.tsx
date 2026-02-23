@@ -41,6 +41,22 @@ export default function SelectDirectoryScreen() {
   const [searchResults, setSearchResults] = useState<FileNode[] | null>(null);
   const [searching, setSearching] = useState(false);
 
+  // Convert relative paths from find/file API into FileNode-like objects
+  const pathsToFileNodes = (directory: string, paths: string[]): FileNode[] => {
+    return paths.map(p => {
+      const trimmed = p.replace(/\/+$/, '');
+      const name = trimmed.split('/').pop() || trimmed;
+      const absolute = `${directory.replace(/\/+$/, '')}/${trimmed}`;
+      return {
+        name,
+        path: trimmed,
+        absolute,
+        type: 'directory' as const,
+        ignored: false,
+      };
+    });
+  };
+
   // Load initial path (home directory)
   useEffect(() => {
     (async () => {
@@ -113,9 +129,9 @@ export default function SelectDirectoryScreen() {
     }
     setSearching(true);
     try {
-      // Search within the current directory
+      // Search within the current directory — returns relative path strings
       const results = await service.findDirectories(currentDirectory, query);
-      setSearchResults(results);
+      setSearchResults(pathsToFileNodes(currentDirectory, results));
     } catch (error) {
       console.error('Error searching:', error);
       setSearchResults([]);

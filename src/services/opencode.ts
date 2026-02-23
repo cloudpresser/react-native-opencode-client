@@ -607,12 +607,12 @@ export class OpenCodeService {
     }
   }
 
-  async listFiles(directory: string, path?: string): Promise<FileNode[]> {
+  async listFiles(directory: string, path: string = '.'): Promise<FileNode[]> {
     try {
       const params = new URLSearchParams();
       params.append('directory', directory);
-      if (path) params.append('path', path);
-      const url = `${this.baseUrl}/file/list?${params.toString()}`;
+      params.append('path', path);
+      const url = `${this.baseUrl}/file?${params.toString()}`;
 
       const response = await fetch(url, {
         headers: this.getHeaders(),
@@ -625,14 +625,14 @@ export class OpenCodeService {
     }
   }
 
-  async findDirectories(directory: string, query: string, limit: number = 50): Promise<FileNode[]> {
+  async findDirectories(directory: string, query: string, limit: number = 50): Promise<string[]> {
     try {
       const params = new URLSearchParams();
       params.append('directory', directory);
       params.append('query', query);
       params.append('type', 'directory');
       params.append('limit', limit.toString());
-      const url = `${this.baseUrl}/find/files?${params.toString()}`;
+      const url = `${this.baseUrl}/find/file?${params.toString()}`;
 
       const response = await fetch(url, {
         headers: this.getHeaders(),
