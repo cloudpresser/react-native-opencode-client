@@ -61,15 +61,6 @@ export interface ImagePart {
   image?: string;
 }
 
-export interface QuestionPart {
-  type: 'question';
-  questionId: string;
-  text: string;
-  kind: 'text' | 'confirm' | 'select' | 'multi-select';
-  options?: string[];
-  default?: any;
-}
-
 export type MessagePart =
   | TextPart
   | ReasoningPart
@@ -77,8 +68,29 @@ export type MessagePart =
   | SourceUrlPart
   | StepStartPart
   | FilePart
-  | ImagePart
-  | QuestionPart;
+  | ImagePart;
+
+/** Shape of an individual question inside a question.asked SSE event */
+export interface QuestionOption {
+  label: string;
+  description: string;
+}
+
+export interface QuestionItem {
+  question: string;
+  header: string;
+  options: QuestionOption[];
+  multiple?: boolean;
+  custom?: boolean;
+}
+
+/** Payload from the server's `question.asked` SSE event */
+export interface QuestionAskedEvent {
+  id: string;           // requestID – used for reply/reject
+  sessionID: string;
+  questions: QuestionItem[];
+  tool?: { messageID: string; callID: string };
+}
 
 export interface ToolMetadata {
   title?: string;
@@ -378,7 +390,7 @@ export class OpenCodeService {
     callbacks?: {
       onTextDelta?: (delta: string) => void;
       onPartUpdated?: (part: any) => void;
-      onQuestionPending?: (question: QuestionPart) => void;
+      onQuestionAsked?: (event: QuestionAskedEvent) => void;
       onComplete?: () => void;
     },
     agentId?: string
@@ -451,28 +463,31 @@ export class OpenCodeService {
               if (delta && (part.type === 'text' || part.type === 'reasoning')) {
                 callbacks?.onTextDelta?.(delta);
               }
-              // Detect question parts and surface them immediately
-              if (part.type === 'question') {
-                callbacks?.onQuestionPending?.({
-                  type: 'question',
-                  questionId: part.questionId,
-                  text: part.text,
-                  kind: part.kind,
-                  options: part.options,
-                  default: part.default,
-                });
-              }
               callbacks?.onPartUpdated?.(part);
             }
             return;
           }
 
-          // Session went idle or is waiting for user input (e.g. question)
+          // The server is asking the user a question (tool blocking)
+          if (data.type === 'question.asked') {
+            const props = data.properties;
+            if (props?.sessionID === sessionId) {
+              callbacks?.onQuestionAsked?.({
+                id: props.id,
+                sessionID: props.sessionID,
+                questions: props.questions,
+                tool: props.tool,
+              });
+            }
+            return;
+          }
+
+          // Session went idle – the LLM finished processing
           if (data.type === 'session.status') {
             const props = data.properties;
             if (props?.sessionID === sessionId) {
               const statusType = props?.status?.type;
-              if (statusType === 'idle' || statusType === 'waiting') {
+              if (statusType === 'idle') {
                 eventSource.close();
                 callbacks?.onComplete?.();
                 resolve();
@@ -498,6 +513,42 @@ export class OpenCodeService {
         resolve();
       }, 600000);
     });
+  }
+
+  /**
+   * Reply to a pending question.
+   * @param requestId  The question request ID (e.g. "que_...")
+   * @param answers    Array of answers, one per question. Each answer is an
+   *                   array of selected option labels (or free-text entries).
+   */
+  async replyToQuestion(requestId: string, answers: string[][]): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/question/${requestId}/reply`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ answers }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error replying to question:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Reject / dismiss a pending question.
+   */
+  async rejectQuestion(requestId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/question/${requestId}/reject`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error rejecting question:', error);
+      return false;
+    }
   }
 
   async getMessages(sessionId: string, limit?: number, before?: string): Promise<Message[]> {

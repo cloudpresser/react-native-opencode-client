@@ -20,8 +20,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
-import { Agent, ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
-import { OpenCodeService, Message as ApiMessage, ToolMetadata, QuestionPart } from '../../services/opencode';
+import { Agent, ChatMessage, ChatMessagePart, ChatQuestion, MessageAttachment, Server, Session } from '../../types';
+import { OpenCodeService, Message as ApiMessage, ToolMetadata, QuestionAskedEvent } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import MarkdownRenderer from './MarkdownRenderer';
 import ToolCallDisplay from './ToolCallDisplay';
@@ -92,19 +92,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
           });
         }
         break;
-      case 'question':
-        chatParts.push({
-          type: 'question',
-          question: {
-            id: part.questionId,
-            text: part.text,
-            kind: part.kind,
-            options: part.options,
-            default: part.default,
-          },
-        });
-        break;
-      // step-start and source-url are structural, skip
+      // step-start, source-url, and other structural types are skipped
     }
   }
 
@@ -129,7 +117,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [streamingText, setStreamingText] = useState('');
-  const [pendingQuestion, setPendingQuestion] = useState<QuestionPart | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<QuestionAskedEvent | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
@@ -351,8 +339,8 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             streamedText += delta;
             setStreamingText(streamedText);
           },
-          onQuestionPending: (question) => {
-            setPendingQuestion(question);
+          onQuestionAsked: (event) => {
+            setPendingQuestion(event);
           },
           onComplete: async () => {
             // Fetch final messages from server to get rich parts
@@ -385,54 +373,26 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     }
   };
 
-  const handleAnswerQuestion = async (questionId: string, answer: any) => {
+  /**
+   * Reply to a pending question from the server.
+   * We call the dedicated question reply endpoint — NOT prompt_async.
+   * The original SSE stream from handleSend is still open and will
+   * continue receiving events once the server unblocks.
+   */
+  const handleAnswerQuestion = async (requestId: string, answers: string[][]) => {
     setPendingQuestion(null);
-    const answerText = typeof answer === 'string' ? answer : JSON.stringify(answer);
-    
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: answerText,
-      timestamp: new Date().toISOString(),
-    };
-
-    addMessage(session.id, userMessage);
-    setLoading(true);
-    setStreamingText('');
 
     try {
-      let streamedText = '';
-      await service.streamMessage(
-        session.id,
-        answerText,
-        undefined,
-        {
-          onTextDelta: (delta) => {
-            streamedText += delta;
-            setStreamingText(streamedText);
-          },
-          onQuestionPending: (question) => {
-            setPendingQuestion(question);
-          },
-          onComplete: async () => {
-            try {
-              const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
-              const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
-              setMessages(session.id, chatMessages);
-            } catch (err) {
-              console.error('Error fetching final messages:', err);
-            }
-          },
-        },
-        selectedAgent
-      );
-      setStreamingText('');
+      const ok = await service.replyToQuestion(requestId, answers);
+      if (!ok) {
+        Alert.alert('Error', 'Failed to send answer to server');
+      }
+      // The original SSE stream is still open.
+      // When the LLM resumes, we'll get more message.part.updated events,
+      // and eventually session.status: idle → onComplete fires.
     } catch (error) {
       console.error('Error answering question:', error);
       Alert.alert('Error', 'Failed to send answer');
-    } finally {
-      setLoading(false);
-      setStreamingText('');
     }
   };
 
@@ -468,20 +428,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
               }
               return null;
             
-            case 'question':
-              if (part.question) {
-                const isLastMessage = sessionMessages.length > 0 && sessionMessages[sessionMessages.length - 1].id === item.id;
-                return (
-                  <QuestionDisplay
-                    key={part.question.id || idx}
-                    question={part.question}
-                    onAnswer={(answer) => handleAnswerQuestion(part.question!.id, answer)}
-                    answered={!isLastMessage}
-                  />
-                );
-              }
-              return null;
-
             case 'reasoning':
               return (
                 <View key={idx} className="border-l-2 border-info pl-2 mb-2 opacity-70">
@@ -637,18 +583,24 @@ export default function ChatTab({ session, server }: ChatTabProps) {
                   {!pendingQuestion && <StyledActivityIndicator className="mt-2" />}
                 </View>
               ) : null}
-              {pendingQuestion && (
+              {pendingQuestion && pendingQuestion.questions.map((q, idx) => (
                 <QuestionDisplay
+                  key={`${pendingQuestion.id}-${idx}`}
                   question={{
-                    id: pendingQuestion.questionId,
-                    text: pendingQuestion.text,
-                    kind: pendingQuestion.kind,
-                    options: pendingQuestion.options,
-                    default: pendingQuestion.default,
+                    requestId: pendingQuestion.id,
+                    question: q.question,
+                    header: q.header,
+                    options: q.options,
+                    multiple: q.multiple,
+                    custom: q.custom,
                   }}
-                  onAnswer={(answer) => handleAnswerQuestion(pendingQuestion.questionId, answer)}
+                  onAnswer={(selectedLabels: string[]) => {
+                    // Build the answers array: one entry per question
+                    // For now we only support single-question events
+                    handleAnswerQuestion(pendingQuestion.id, [selectedLabels]);
+                  }}
                 />
-              )}
+              ))}
             </View>
           ) : null
         }
