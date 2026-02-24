@@ -106,33 +106,31 @@ export default function QuestionDisplay({ question, onAnswer, answered = false }
         </View>
       )}
 
-      {/* Custom text input (when custom flag is set, or no options at all) */}
-      {(question.custom || !hasOptions) && (
-        <View className="flex-row items-center mb-2">
-          <TextInput
-            value={customText}
-            onChangeText={setCustomText}
-            editable={!isDisabled}
-            placeholder="Type your answer..."
-            placeholderTextColor={colors.textSubtle}
-            className="flex-1 bg-surface border border-border rounded-md px-3 py-2 text-text mr-2"
-            onSubmitEditing={hasOptions ? handleSubmitMultiple : handleSubmitCustomOnly}
-            returnKeyType="send"
-          />
-          {/* Show send button for custom-only (no options) */}
-          {!hasOptions && (
-            <TouchableOpacity
-              onPress={handleSubmitCustomOnly}
-              disabled={isDisabled || !customText.trim()}
-              className={`px-4 py-2 rounded-md bg-primary justify-center ${
-                isDisabled || !customText.trim() ? 'opacity-50' : ''
-              }`}
-            >
-              <Text className="text-on-primary font-medium">Send</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      {/* Custom text input - always available for "Other" option */}
+      <View className="flex-row items-center mb-2">
+        <TextInput
+          value={customText}
+          onChangeText={setCustomText}
+          editable={!isDisabled}
+          placeholder="Other (type your answer)..."
+          placeholderTextColor={colors.textSubtle}
+          className="flex-1 bg-surface border border-border rounded-md px-3 py-2 text-text mr-2"
+          onSubmitEditing={hasOptions ? handleSubmitMultiple : handleSubmitCustomOnly}
+          returnKeyType="send"
+        />
+        {/* Show send button for custom-only (no options) */}
+        {!hasOptions && (
+          <TouchableOpacity
+            onPress={handleSubmitCustomOnly}
+            disabled={isDisabled || !customText.trim()}
+            className={`px-4 py-2 rounded-md bg-primary justify-center ${
+              isDisabled || !customText.trim() ? 'opacity-50' : ''
+            }`}
+          >
+            <Text className="text-on-primary font-medium">Send</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Submit button for multi-select mode */}
       {question.multiple && hasOptions && (
