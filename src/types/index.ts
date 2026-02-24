@@ -82,6 +82,26 @@ export interface ChatMessageToolCall {
   title?: string;
 }
 
+export interface ChatQuestionOption {
+  label: string;
+  description: string;
+}
+
+export interface ChatQuestion {
+  /** The requestID from the server (e.g. "que_...") — used for reply/reject */
+  requestId: string;
+  /** The question text / prompt */
+  question: string;
+  /** Short header label (max 12 chars) */
+  header: string;
+  /** Available choices */
+  options: ChatQuestionOption[];
+  /** Whether multiple options can be selected */
+  multiple?: boolean;
+  /** Whether the user can provide free-text (custom) input */
+  custom?: boolean;
+}
+
 export interface ChatMessagePart {
   type: 'text' | 'tool-call' | 'reasoning';
   content?: string;

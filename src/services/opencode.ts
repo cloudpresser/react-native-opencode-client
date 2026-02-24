@@ -70,6 +70,28 @@ export type MessagePart =
   | FilePart
   | ImagePart;
 
+/** Shape of an individual question inside a question.asked SSE event */
+export interface QuestionOption {
+  label: string;
+  description: string;
+}
+
+export interface QuestionItem {
+  question: string;
+  header: string;
+  options: QuestionOption[];
+  multiple?: boolean;
+  custom?: boolean;
+}
+
+/** Payload from the server's `question.asked` SSE event */
+export interface QuestionAskedEvent {
+  id: string;           // requestID – used for reply/reject
+  sessionID: string;
+  questions: QuestionItem[];
+  tool?: { messageID: string; callID: string };
+}
+
 export interface ToolMetadata {
   title?: string;
   time?: { start?: number; end?: number };
@@ -359,7 +381,7 @@ export class OpenCodeService {
    *
    * Connects to GET /event, waits for server.connected, then sends the
    * prompt via POST /session/{id}/prompt_async. Streams incremental text
-   * deltas and resolves when the session goes idle.
+   * deltas and resolves when the session goes idle or a question is pending.
    */
   async streamMessage(
     sessionId: string,
@@ -368,6 +390,7 @@ export class OpenCodeService {
     callbacks?: {
       onTextDelta?: (delta: string) => void;
       onPartUpdated?: (part: any) => void;
+      onQuestionAsked?: (event: QuestionAskedEvent) => void;
       onComplete?: () => void;
     },
     agentId?: string
@@ -445,13 +468,30 @@ export class OpenCodeService {
             return;
           }
 
-          // Session went idle — agent is done
+          // The server is asking the user a question (tool blocking)
+          if (data.type === 'question.asked') {
+            const props = data.properties;
+            if (props?.sessionID === sessionId) {
+              callbacks?.onQuestionAsked?.({
+                id: props.id,
+                sessionID: props.sessionID,
+                questions: props.questions,
+                tool: props.tool,
+              });
+            }
+            return;
+          }
+
+          // Session went idle – the LLM finished processing
           if (data.type === 'session.status') {
             const props = data.properties;
-            if (props?.sessionID === sessionId && props?.status?.type === 'idle') {
-              eventSource.close();
-              callbacks?.onComplete?.();
-              resolve();
+            if (props?.sessionID === sessionId) {
+              const statusType = props?.status?.type;
+              if (statusType === 'idle') {
+                eventSource.close();
+                callbacks?.onComplete?.();
+                resolve();
+              }
             }
             return;
           }
@@ -473,6 +513,42 @@ export class OpenCodeService {
         resolve();
       }, 600000);
     });
+  }
+
+  /**
+   * Reply to a pending question.
+   * @param requestId  The question request ID (e.g. "que_...")
+   * @param answers    Array of answers, one per question. Each answer is an
+   *                   array of selected option labels (or free-text entries).
+   */
+  async replyToQuestion(requestId: string, answers: string[][]): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/question/${requestId}/reply`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ answers }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error replying to question:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Reject / dismiss a pending question.
+   */
+  async rejectQuestion(requestId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/question/${requestId}/reject`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error rejecting question:', error);
+      return false;
+    }
   }
 
   async getMessages(sessionId: string, limit?: number, before?: string): Promise<Message[]> {

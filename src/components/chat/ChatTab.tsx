@@ -20,11 +20,12 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
-import { Agent, ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
-import { OpenCodeService, Message as ApiMessage, ToolMetadata } from '../../services/opencode';
+import { Agent, ChatMessage, ChatMessagePart, ChatQuestion, MessageAttachment, Server, Session } from '../../types';
+import { OpenCodeService, Message as ApiMessage, ToolMetadata, QuestionAskedEvent } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import MarkdownRenderer from './MarkdownRenderer';
 import ToolCallDisplay from './ToolCallDisplay';
+import QuestionDisplay from './QuestionDisplay';
 
 const StyledImage = withUniwind(Image);
 const StyledActivityIndicator = withUniwind(ActivityIndicator);
@@ -91,7 +92,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
           });
         }
         break;
-      // step-start and source-url are structural, skip
+      // step-start, source-url, and other structural types are skipped
     }
   }
 
@@ -116,6 +117,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [streamingText, setStreamingText] = useState('');
+  const [pendingQuestion, setPendingQuestion] = useState<QuestionAskedEvent | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
@@ -337,6 +339,9 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             streamedText += delta;
             setStreamingText(streamedText);
           },
+          onQuestionAsked: (event) => {
+            setPendingQuestion(event);
+          },
           onComplete: async () => {
             // Fetch final messages from server to get rich parts
             // (tool calls, reasoning blocks, attachments, etc.)
@@ -365,6 +370,29 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     } finally {
       setLoading(false);
       setStreamingText('');
+    }
+  };
+
+  /**
+   * Reply to a pending question from the server.
+   * We call the dedicated question reply endpoint — NOT prompt_async.
+   * The original SSE stream from handleSend is still open and will
+   * continue receiving events once the server unblocks.
+   */
+  const handleAnswerQuestion = async (requestId: string, answers: string[][]) => {
+    setPendingQuestion(null);
+
+    try {
+      const ok = await service.replyToQuestion(requestId, answers);
+      if (!ok) {
+        Alert.alert('Error', 'Failed to send answer to server');
+      }
+      // The original SSE stream is still open.
+      // When the LLM resumes, we'll get more message.part.updated events,
+      // and eventually session.status: idle → onComplete fires.
+    } catch (error) {
+      console.error('Error answering question:', error);
+      Alert.alert('Error', 'Failed to send answer');
     }
   };
 
@@ -399,7 +427,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
                 return <ToolCallDisplay key={part.toolCall.toolCallId || idx} toolCall={part.toolCall} />;
               }
               return null;
-
+            
             case 'reasoning':
               return (
                 <View key={idx} className="border-l-2 border-info pl-2 mb-2 opacity-70">
@@ -546,11 +574,33 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           </View>
         }
         ListFooterComponent={
-          streamingText ? (
-            <View className="self-start w-full py-2" testID="streaming-message">
-              <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
-              <MarkdownRenderer content={streamingText} />
-              <StyledActivityIndicator className="mt-2" />
+          streamingText || pendingQuestion ? (
+            <View>
+              {streamingText ? (
+                <View className="self-start w-full py-2" testID="streaming-message">
+                  <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
+                  <MarkdownRenderer content={streamingText} />
+                  {!pendingQuestion && <StyledActivityIndicator className="mt-2" />}
+                </View>
+              ) : null}
+              {pendingQuestion && pendingQuestion.questions.map((q, idx) => (
+                <QuestionDisplay
+                  key={`${pendingQuestion.id}-${idx}`}
+                  question={{
+                    requestId: pendingQuestion.id,
+                    question: q.question,
+                    header: q.header,
+                    options: q.options,
+                    multiple: q.multiple,
+                    custom: q.custom,
+                  }}
+                  onAnswer={(selectedLabels: string[]) => {
+                    // Build the answers array: one entry per question
+                    // For now we only support single-question events
+                    handleAnswerQuestion(pendingQuestion.id, [selectedLabels]);
+                  }}
+                />
+              ))}
             </View>
           ) : null
         }
