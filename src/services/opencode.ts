@@ -551,6 +551,40 @@ export class OpenCodeService {
     }
   }
 
+  /**
+   * Get the status of all non-idle sessions.
+   * Returns a map of sessionId → { type: 'busy' | 'retry', ... }.
+   * Sessions not in the map are idle.
+   */
+  async getSessionStatuses(): Promise<Record<string, { type: string; [key: string]: any }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/session/status`, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch session statuses');
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching session statuses:', error);
+      return {};
+    }
+  }
+
+  /**
+   * List all pending questions across all sessions.
+   */
+  async listPendingQuestions(): Promise<QuestionAskedEvent[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/question`, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch pending questions');
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching pending questions:', error);
+      return [];
+    }
+  }
+
   async getMessages(sessionId: string, limit?: number, before?: string): Promise<Message[]> {
     try {
       const params = new URLSearchParams();
