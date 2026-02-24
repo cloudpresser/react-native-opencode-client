@@ -1,3 +1,10 @@
+# [2.11.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.10.0...v2.11.0) (2026-02-24)
+
+
+### Features
+
+* add local notification system with 3-layer architecture ([fdd84b5](https://github.com/cloudpresser/react-native-opencode-client/commit/fdd84b56e4541e125c0c528627fe1bfd605ace6e)), closes [#15](https://github.com/cloudpresser/react-native-opencode-client/issues/15)
+
 # [2.10.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.9.0...v2.10.0) (2026-02-24)
 
 
