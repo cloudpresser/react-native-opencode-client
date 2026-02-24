@@ -15,6 +15,7 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,6 +24,7 @@ import { useStore } from '../../store';
 import { Agent, ChatMessage, ChatMessagePart, ChatQuestion, MessageAttachment, Server, Session } from '../../types';
 import { OpenCodeService, Message as ApiMessage, ToolMetadata, QuestionAskedEvent } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { useAppStateRefresh } from '../../hooks/useAppStateRefresh';
 import MarkdownRenderer from './MarkdownRenderer';
 import ToolCallDisplay from './ToolCallDisplay';
 import QuestionDisplay from './QuestionDisplay';
@@ -110,7 +112,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
 
 export default function ChatTab({ session, server }: ChatTabProps) {
   const colors = useThemeColors();
-  const { messages, hasMoreMessages, addMessage, setMessages, prependMessages, setHasMoreMessages } = useStore();
+  const { messages, hasMoreMessages, addMessage, setMessages, prependMessages, setHasMoreMessages, setViewedSessionId } = useStore();
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -125,6 +127,25 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
+
+  // ─── Notification suppression: report which session is being viewed ───
+  useFocusEffect(
+    useCallback(() => {
+      setViewedSessionId(session.id);
+      return () => setViewedSessionId(null);
+    }, [session.id, setViewedSessionId]),
+  );
+
+  // ─── Refetch messages when app resumes from background ───
+  useAppStateRefresh(useCallback(async () => {
+    try {
+      const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+      const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+      setMessages(session.id, chatMessages);
+    } catch (err) {
+      console.error('Error refreshing messages on resume:', err);
+    }
+  }, [session.id, service, setMessages]));
 
   useEffect(() => {
     const loadAgents = async () => {

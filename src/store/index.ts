@@ -46,6 +46,10 @@ interface AppState {
   setHasMoreMessages: (sessionId: string, hasMore: boolean) => void;
   clearMessages: (sessionId: string) => void;
 
+  // Notification suppression
+  viewedSessionId: string | null;
+  setViewedSessionId: (id: string | null) => void;
+
   // Git Files
   gitFiles: Record<string, GitFile[]>;
   setGitFiles: (sessionId: string, files: GitFile[]) => void;
@@ -241,6 +245,10 @@ export const useStore = create<AppState>((set, get) => ({
     delete hasMoreMessages[sessionId];
     set({ messages, hasMoreMessages });
   },
+
+  // Notification suppression
+  viewedSessionId: null,
+  setViewedSessionId: (id: string | null) => set({ viewedSessionId: id }),
 
   // Git Files
   gitFiles: {},

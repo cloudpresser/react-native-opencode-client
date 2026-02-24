@@ -54,7 +54,14 @@
           }
         }
       ],
-      "./plugins/withNMSSHSimulatorFix"
+      [
+        "expo-notifications",
+        {
+          "color": "#7aa2f7"
+        }
+      ],
+      "./plugins/withNMSSHSimulatorFix",
+      "expo-background-task"
     ]
   }
 }
