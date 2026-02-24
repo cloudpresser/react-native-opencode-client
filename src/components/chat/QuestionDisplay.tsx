@@ -107,30 +107,32 @@ export default function QuestionDisplay({ question, onAnswer, answered = false }
       )}
 
       {/* Custom text input - always available for "Other" option */}
-      <View className="flex-row items-center mb-2">
+      <TouchableOpacity
+        onPress={() => {
+          // In single-select mode with options, allow clicking to submit custom text
+          if (!question.multiple && hasOptions && customText.trim()) {
+            handleSubmitCustomOnly();
+          }
+        }}
+        disabled={isDisabled || !customText.trim() || question.multiple || !hasOptions}
+        activeOpacity={!question.multiple && hasOptions && customText.trim() ? 0.7 : 1}
+        className={`p-3 rounded-md border mb-2 ${
+          customText.trim()
+            ? 'bg-primary/10 border-primary'
+            : 'bg-surface border-border'
+        } ${isDisabled && !customText.trim() ? 'opacity-50' : ''}`}
+      >
         <TextInput
           value={customText}
           onChangeText={setCustomText}
           editable={!isDisabled}
           placeholder="Other (type your answer)..."
           placeholderTextColor={colors.textSubtle}
-          className="flex-1 bg-surface border border-border rounded-md px-3 py-2 text-text mr-2"
-          onSubmitEditing={hasOptions ? handleSubmitMultiple : handleSubmitCustomOnly}
+          className={`${customText.trim() ? 'text-primary' : 'text-text'} font-medium`}
+          onSubmitEditing={hasOptions && question.multiple ? handleSubmitMultiple : handleSubmitCustomOnly}
           returnKeyType="send"
         />
-        {/* Show send button for custom-only (no options) */}
-        {!hasOptions && (
-          <TouchableOpacity
-            onPress={handleSubmitCustomOnly}
-            disabled={isDisabled || !customText.trim()}
-            className={`px-4 py-2 rounded-md bg-primary justify-center ${
-              isDisabled || !customText.trim() ? 'opacity-50' : ''
-            }`}
-          >
-            <Text className="text-on-primary font-medium">Send</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      </TouchableOpacity>
 
       {/* Submit button for multi-select mode */}
       {question.multiple && hasOptions && (
