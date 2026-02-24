@@ -1,3 +1,17 @@
+# [2.10.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.9.0...v2.10.0) (2026-02-24)
+
+
+### Bug Fixes
+
+* align question support with server API ([d7480e8](https://github.com/cloudpresser/react-native-opencode-client/commit/d7480e87f920b520462c995b98f27d889cf48697))
+* render question UI during streaming response ([25eacc8](https://github.com/cloudpresser/react-native-opencode-client/commit/25eacc8c96dd06f37f64a1b81ff9e21d3cec88b1))
+* resolve streaming hang when agent sends question ([fd9c600](https://github.com/cloudpresser/react-native-opencode-client/commit/fd9c600d268e80e3fc39f148c380b7420ad2f55f))
+
+
+### Features
+
+* add support for question messages ([a935a9e](https://github.com/cloudpresser/react-native-opencode-client/commit/a935a9ece49659b38c4092296f5b97349a7b3d3b))
+
 # [2.9.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.8.7...v2.9.0) (2026-02-23)
 
 
