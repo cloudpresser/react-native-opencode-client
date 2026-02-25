@@ -125,7 +125,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
-  const [selectedAgent, setSelectedAgent] = useState<string>('build');
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
@@ -159,8 +159,8 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           (a) => a.mode === 'primary' && !a.hidden
         );
         setAgents(primaryAgents);
-        // Default to first primary agent if current selection isn't in the list
-        if (primaryAgents.length > 0 && !primaryAgents.find((a) => a.name === selectedAgent)) {
+        // Default to first primary agent if current selection isn't in the list or is empty
+        if (primaryAgents.length > 0 && (!selectedAgent || !primaryAgents.find((a) => a.name === selectedAgent))) {
           setSelectedAgent(primaryAgents[0].name);
         }
       } catch (error) {
@@ -306,6 +306,18 @@ export default function ChatTab({ session, server }: ChatTabProps) {
 
   const removeAttachment = (id: string) => {
     setAttachments(attachments.filter(a => a.id !== id));
+  };
+
+  const handleStop = async () => {
+    try {
+      await service.abortSession(session.id);
+      // The stream will naturally end or error out, so we rely on that to clear loading state
+      // But we can force it here for immediate UI feedback
+      setLoading(false);
+    } catch (error) {
+      console.error('Error aborting session:', error);
+      Alert.alert('Error', 'Failed to stop generation');
+    }
   };
 
   const handleSend = async () => {
@@ -748,13 +760,23 @@ keyExtractor={(item: MessageAttachment) => item.id}
             testID="chat-input"
           />
 
-          <TouchableOpacity
-            className="rounded-full px-5 py-2.5 justify-center items-center bg-primary"
-            onPress={handleSend}
-            testID="send-message-btn"
-          >
-            <Text className="text-on-primary font-semibold">Send</Text>
-          </TouchableOpacity>
+          {loading ? (
+            <TouchableOpacity
+              className="rounded-full px-5 py-2.5 justify-center items-center bg-danger"
+              onPress={handleStop}
+              testID="stop-message-btn"
+            >
+              <Text className="text-on-primary font-semibold">Stop</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              className="rounded-full px-5 py-2.5 justify-center items-center bg-primary"
+              onPress={handleSend}
+              testID="send-message-btn"
+            >
+              <Text className="text-on-primary font-semibold">Send</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
