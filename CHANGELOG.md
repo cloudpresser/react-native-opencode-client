@@ -1,3 +1,11 @@
+# [2.12.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.11.0...v2.12.0) (2026-02-25)
+
+
+### Features
+
+* improve Other option UX and add permission request handling ([8d97ec1](https://github.com/cloudpresser/react-native-opencode-client/commit/8d97ec14bf122bbfb5365f947fcd78bc5bbe470b)), closes [#22](https://github.com/cloudpresser/react-native-opencode-client/issues/22)
+* make 'Other' option always available in questions ([fdb0ce2](https://github.com/cloudpresser/react-native-opencode-client/commit/fdb0ce20002e7314fabbba211973b9faa39cb67e)), closes [#22](https://github.com/cloudpresser/react-native-opencode-client/issues/22)
+
 # [2.11.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.10.0...v2.11.0) (2026-02-24)
 
 
