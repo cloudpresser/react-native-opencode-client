@@ -154,9 +154,10 @@ export default function ChatTab({ session, server }: ChatTabProps) {
       try {
         setAgentsLoading(true);
         const fetchedAgents = await service.getAgents();
-        // Show only non-hidden primary agents in the picker
+        // Show non-hidden agents that are either primary or 'all'
+        // Some backends might return agents without a mode, so we'll be permissive if mode is missing but it's not explicitly hidden
         const primaryAgents = fetchedAgents.filter(
-          (a) => a.mode === 'primary' && !a.hidden
+          (a) => (!a.mode || a.mode === 'primary' || a.mode === 'all') && !a.hidden
         );
         setAgents(primaryAgents);
         // Default to first primary agent if current selection isn't in the list or is empty
