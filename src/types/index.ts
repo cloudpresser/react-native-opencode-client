@@ -102,6 +102,17 @@ export interface ChatQuestion {
   custom?: boolean;
 }
 
+export interface ChatPermission {
+  /** The requestID from the server (e.g. "perm_...") — used for approve/deny */
+  requestId: string;
+  /** The permission request description */
+  message: string;
+  /** Short header label */
+  header?: string;
+  /** Optional detailed explanation */
+  details?: string;
+}
+
 export interface ChatMessagePart {
   type: 'text' | 'tool-call' | 'reasoning';
   content?: string;

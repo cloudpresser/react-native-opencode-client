@@ -21,13 +21,14 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
-import { Agent, ChatMessage, ChatMessagePart, ChatQuestion, MessageAttachment, Server, Session } from '../../types';
-import { OpenCodeService, Message as ApiMessage, ToolMetadata, QuestionAskedEvent } from '../../services/opencode';
+import { Agent, ChatMessage, ChatMessagePart, ChatPermission, ChatQuestion, MessageAttachment, Server, Session } from '../../types';
+import { OpenCodeService, Message as ApiMessage, ToolMetadata, QuestionAskedEvent, PermissionAskedEvent } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useAppStateRefresh } from '../../hooks/useAppStateRefresh';
 import MarkdownRenderer from './MarkdownRenderer';
 import ToolCallDisplay from './ToolCallDisplay';
 import QuestionDisplay from './QuestionDisplay';
+import PermissionDisplay from './PermissionDisplay';
 
 const StyledImage = withUniwind(Image);
 const StyledActivityIndicator = withUniwind(ActivityIndicator);
@@ -120,6 +121,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [initialLoading, setInitialLoading] = useState(true);
   const [streamingText, setStreamingText] = useState('');
   const [pendingQuestion, setPendingQuestion] = useState<QuestionAskedEvent | null>(null);
+  const [pendingPermission, setPendingPermission] = useState<PermissionAskedEvent | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
@@ -363,6 +365,9 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           onQuestionAsked: (event) => {
             setPendingQuestion(event);
           },
+          onPermissionAsked: (event) => {
+            setPendingPermission(event);
+          },
           onComplete: async () => {
             // Fetch final messages from server to get rich parts
             // (tool calls, reasoning blocks, attachments, etc.)
@@ -414,6 +419,40 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     } catch (error) {
       console.error('Error answering question:', error);
       Alert.alert('Error', 'Failed to send answer');
+    }
+  };
+
+  /**
+   * Approve a pending permission request from the server.
+   */
+  const handleApprovePermission = async (requestId: string) => {
+    setPendingPermission(null);
+
+    try {
+      const ok = await service.approvePermission(requestId);
+      if (!ok) {
+        Alert.alert('Error', 'Failed to approve permission');
+      }
+    } catch (error) {
+      console.error('Error approving permission:', error);
+      Alert.alert('Error', 'Failed to approve permission');
+    }
+  };
+
+  /**
+   * Deny a pending permission request from the server.
+   */
+  const handleDenyPermission = async (requestId: string) => {
+    setPendingPermission(null);
+
+    try {
+      const ok = await service.denyPermission(requestId);
+      if (!ok) {
+        Alert.alert('Error', 'Failed to deny permission');
+      }
+    } catch (error) {
+      console.error('Error denying permission:', error);
+      Alert.alert('Error', 'Failed to deny permission');
     }
   };
 
@@ -595,13 +634,13 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           </View>
         }
         ListFooterComponent={
-          streamingText || pendingQuestion ? (
+          streamingText || pendingQuestion || pendingPermission ? (
             <View>
               {streamingText ? (
                 <View className="self-start w-full py-2" testID="streaming-message">
                   <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
                   <MarkdownRenderer content={streamingText} />
-                  {!pendingQuestion && <StyledActivityIndicator className="mt-2" />}
+                  {!pendingQuestion && !pendingPermission && <StyledActivityIndicator className="mt-2" />}
                 </View>
               ) : null}
               {pendingQuestion && pendingQuestion.questions.map((q, idx) => (
@@ -622,6 +661,19 @@ export default function ChatTab({ session, server }: ChatTabProps) {
                   }}
                 />
               ))}
+              {pendingPermission && (
+                <PermissionDisplay
+                  key={pendingPermission.id}
+                  permission={{
+                    requestId: pendingPermission.id,
+                    message: pendingPermission.permission.message,
+                    header: pendingPermission.permission.header,
+                    details: pendingPermission.permission.details,
+                  }}
+                  onApprove={() => handleApprovePermission(pendingPermission.id)}
+                  onDeny={() => handleDenyPermission(pendingPermission.id)}
+                />
+              )}
             </View>
           ) : null
         }

@@ -92,6 +92,21 @@ export interface QuestionAskedEvent {
   tool?: { messageID: string; callID: string };
 }
 
+/** Permission request item */
+export interface PermissionItem {
+  message: string;
+  header?: string;
+  details?: string;
+}
+
+/** Payload from the server's `permission.asked` SSE event */
+export interface PermissionAskedEvent {
+  id: string;           // requestID – used for approve/deny
+  sessionID: string;
+  permission: PermissionItem;
+  tool?: { messageID: string; callID: string };
+}
+
 export interface ToolMetadata {
   title?: string;
   time?: { start?: number; end?: number };
@@ -391,6 +406,7 @@ export class OpenCodeService {
       onTextDelta?: (delta: string) => void;
       onPartUpdated?: (part: any) => void;
       onQuestionAsked?: (event: QuestionAskedEvent) => void;
+      onPermissionAsked?: (event: PermissionAskedEvent) => void;
       onComplete?: () => void;
     },
     agentId?: string
@@ -476,6 +492,20 @@ export class OpenCodeService {
                 id: props.id,
                 sessionID: props.sessionID,
                 questions: props.questions,
+                tool: props.tool,
+              });
+            }
+            return;
+          }
+
+          // The server is requesting permission (tool blocking)
+          if (data.type === 'permission.asked') {
+            const props = data.properties;
+            if (props?.sessionID === sessionId) {
+              callbacks?.onPermissionAsked?.({
+                id: props.id,
+                sessionID: props.sessionID,
+                permission: props.permission,
                 tool: props.tool,
               });
             }
@@ -581,6 +611,54 @@ export class OpenCodeService {
       return response.json();
     } catch (error) {
       console.error('Error fetching pending questions:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Approve a permission request.
+   */
+  async approvePermission(requestId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/permission/${requestId}/approve`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error approving permission:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Deny a permission request.
+   */
+  async denyPermission(requestId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/permission/${requestId}/deny`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error denying permission:', error);
+      return false;
+    }
+  }
+
+  /**
+   * List all pending permission requests (for background polling/notifications).
+   */
+  async listPendingPermissions(): Promise<PermissionAskedEvent[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/permission`, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch pending permissions');
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching pending permissions:', error);
       return [];
     }
   }
