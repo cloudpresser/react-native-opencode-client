@@ -6,7 +6,8 @@ import { Server, Session, SSHConfig, SSHConnectionStatus } from '../../types';
 import { SSHService } from '../../services/ssh';
 import SSHStatusLine from './SSHStatusLine';
 import SSHSettingsPanel from './SSHSettingsPanel';
-import TerminalEmulator, { TerminalLine } from './TerminalEmulator';
+import XTerm, { XTermRef } from './XTerm';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 interface TerminalTabProps {
   session: Session;
@@ -16,10 +17,11 @@ interface TerminalTabProps {
 export default function TerminalTab({ session, server }: TerminalTabProps) {
   const headerHeight = useHeaderHeight();
   const sshRef = useRef<SSHService | null>(null);
+  const xtermRef = useRef<XTermRef | null>(null);
+  const colors = useThemeColors();
 
   const [sshStatus, setSSHStatus] = useState<SSHConnectionStatus>('disconnected');
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
-  const [lines, setLines] = useState<TerminalLine[]>([]);
   const [sshConfig, setSSHConfig] = useState<SSHConfig>({
     host: server.host === 'localhost' ? '127.0.0.1' : server.host,
     port: server.sshPort ?? 22,
@@ -36,11 +38,10 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     };
   }, []);
 
-  const addLine = useCallback((type: TerminalLine['type'], content: string) => {
-    setLines((prev) => [
-      ...prev,
-      { id: Date.now().toString() + Math.random(), type, content },
-    ]);
+  const handleTerminalData = useCallback((data: string) => {
+    if (sshRef.current?.hasShell) {
+      sshRef.current.write(data);
+    }
   }, []);
 
   const handleConnect = useCallback(async () => {
@@ -68,58 +69,43 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     };
 
     ssh.onData = (data) => {
-      addLine('output', data);
+      xtermRef.current?.write(data);
     };
 
     ssh.onError = (error) => {
-      addLine('error', error);
+      const msg = `\r\n\x1b[31mError: ${error}\x1b[0m\r\n`;
+      xtermRef.current?.write(msg);
       setErrorMessage(error);
     };
 
     ssh.onClose = () => {
-      addLine('system', '--- Connection closed ---');
+      xtermRef.current?.write('\r\n\x1b[33m--- Connection closed ---\x1b[0m\r\n');
       setSSHStatus('disconnected');
     };
 
     setSSHStatus('connecting');
     setErrorMessage(undefined);
-    addLine('system', `Connecting to ${sshConfig.username}@${sshConfig.host}:${sshConfig.port}...`);
+    xtermRef.current?.write(`\r\n\x1b[32mConnecting to ${sshConfig.username}@${sshConfig.host}:${sshConfig.port}...\x1b[0m\r\n`);
 
     try {
       await ssh.connect(sshConfig);
-      addLine('system', 'SSH connected. Starting shell...');
+      xtermRef.current?.write('\r\n\x1b[32mSSH connected. Starting shell...\x1b[0m\r\n');
       await ssh.startShell();
-      addLine('system', 'Shell ready.');
+      xtermRef.current?.focus();
     } catch (err: any) {
       const msg = err?.message || String(err);
       setErrorMessage(msg);
       setSSHStatus('error');
-      addLine('error', `Connection failed: ${msg}`);
+      xtermRef.current?.write(`\r\n\x1b[31mConnection failed: ${msg}\x1b[0m\r\n`);
     }
-  }, [sshConfig, addLine]);
+  }, [sshConfig]);
 
   const handleDisconnect = useCallback(() => {
     sshRef.current?.disconnect();
     sshRef.current = null;
     setSSHStatus('disconnected');
     setErrorMessage(undefined);
-    addLine('system', '--- Disconnected ---');
-  }, [addLine]);
-
-  const handleSendCommand = useCallback(
-    (command: string) => {
-      if (!sshRef.current?.hasShell) {
-        addLine('error', 'No active shell. Connect first.');
-        return;
-      }
-      // Send with newline to execute
-      sshRef.current.write(command + '\n');
-    },
-    [addLine],
-  );
-
-  const handleClear = useCallback(() => {
-    setLines([]);
+    xtermRef.current?.write('\r\n\x1b[33m--- Disconnected ---\x1b[0m\r\n');
   }, []);
 
   return (
@@ -141,12 +127,18 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         disabled={sshStatus === 'connecting' || sshStatus === 'connected'}
       />
 
-      <TerminalEmulator
-        lines={lines}
-        sshStatus={sshStatus}
-        onSendCommand={handleSendCommand}
-        onClear={handleClear}
-      />
+      <View style={{ flex: 1, backgroundColor: colors.surfaceElevated }}>
+        <XTerm
+          ref={xtermRef}
+          onData={handleTerminalData}
+          theme={{
+            background: colors.surfaceElevated,
+            foreground: colors.text,
+            cursor: colors.text,
+            selection: colors.primary + '40', // 40 = 25% opacity
+          }}
+        />
+      </View>
     </ControllerKeyboardAvoidingView>
   );
 }
