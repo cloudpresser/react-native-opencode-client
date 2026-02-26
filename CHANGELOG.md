@@ -1,3 +1,15 @@
+# [2.13.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.12.0...v2.13.0) (2026-02-26)
+
+
+### Bug Fixes
+
+* **chat:** relax agent filtering to include 'all' mode and legacy agents ([7afd794](https://github.com/cloudpresser/react-native-opencode-client/commit/7afd794f8a6ca761a4d57e0157127a515b0d39fa))
+
+
+### Features
+
+* **chat:** add abort button and improve agent selection ([ce4f4c6](https://github.com/cloudpresser/react-native-opencode-client/commit/ce4f4c6101691bd5fc9553b2132a2406b31cb67b))
+
 # [2.12.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.11.0...v2.12.0) (2026-02-25)
 
 
