@@ -94,22 +94,43 @@ export class SSHService {
    * and other non-standard terminal types) and sets the correct
    * terminal dimensions via stty since the SSH library doesn't expose
    * a native PTY resize API.
+   *
+   * The command is wrapped to suppress echo: stty -echo hides the
+   * command itself from appearing in the terminal, then stty echo
+   * restores normal input echoing. A final clear + reset-cursor
+   * ensures the user sees a clean prompt.
    */
   async setupTerminal(cols: number, rows: number): Promise<void> {
     if (!this.client || !this.shellStarted) return;
-    await this.client.writeToShell(
-      `export TERM=xterm-256color; stty cols ${cols} rows ${rows}; clear\n`,
-    );
+    // Use a single compound command that:
+    // 1. Temporarily disables echo so the setup commands are invisible
+    // 2. Sets TERM for broad compatibility (fixes Ghostty/non-standard terminals)
+    // 3. Sets the correct terminal dimensions via stty
+    // 4. Re-enables echo
+    // 5. Clears the screen so the user starts with a clean slate
+    const cmd = [
+      'stty -echo',
+      'export TERM=xterm-256color',
+      `stty cols ${cols} rows ${rows}`,
+      'stty echo',
+      'clear',
+    ].join(' && ');
+    await this.client.writeToShell(`${cmd}\n`);
   }
 
   /**
    * Resize the remote terminal using stty.
    * This is a workaround because the SSH library doesn't expose
    * the SSH window-change message (RFC 4254).
+   *
+   * Uses stty -echo/echo to suppress the command from appearing
+   * in the terminal output.
    */
   async resizeShell(cols: number, rows: number): Promise<void> {
     if (!this.client || !this.shellStarted) return;
-    await this.client.writeToShell(`stty cols ${cols} rows ${rows}\n`);
+    await this.client.writeToShell(
+      `stty -echo && stty cols ${cols} rows ${rows} && stty echo\n`,
+    );
   }
 
   disconnect(): void {

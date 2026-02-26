@@ -47,12 +47,17 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     }
   }, []);
 
+  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleTerminalResize = useCallback(({ cols, rows }: { cols: number; rows: number }) => {
     termDimensionsRef.current = { cols, rows };
-    // If shell is running, update the remote terminal size
-    if (sshRef.current?.hasShell) {
-      sshRef.current.resizeShell(cols, rows);
-    }
+    // Debounce resize commands to avoid flooding the shell during rapid layout changes
+    if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+    resizeTimerRef.current = setTimeout(() => {
+      if (sshRef.current?.hasShell) {
+        sshRef.current.resizeShell(cols, rows);
+      }
+    }, 150);
   }, []);
 
   const handleConnect = useCallback(async () => {
@@ -102,9 +107,16 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       await ssh.connect(sshConfig);
       xtermRef.current?.write('\r\n\x1b[32mSSH connected. Starting shell...\x1b[0m\r\n');
       await ssh.startShell();
+      // Let the shell initialize (e.g. .bashrc/.zshrc) before sending setup commands
+      await new Promise((r) => setTimeout(r, 500));
       // Set TERM=xterm-256color for Ghostty compatibility and sync terminal dimensions
       const { cols, rows } = termDimensionsRef.current;
       await ssh.setupTerminal(cols, rows);
+      // Give the clear command time to execute, then reset the local xterm buffer
+      // so the user starts with a pristine terminal showing only the shell prompt
+      setTimeout(() => {
+        xtermRef.current?.clear();
+      }, 300);
       xtermRef.current?.focus();
     } catch (err: any) {
       const msg = err?.message || String(err);
