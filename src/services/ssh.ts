@@ -88,6 +88,30 @@ export class SSHService {
     await this.client.writeToShell(data);
   }
 
+  /**
+   * Send terminal environment setup commands after shell start.
+   * Sets TERM=xterm-256color for maximum compatibility (fixes Ghostty
+   * and other non-standard terminal types) and sets the correct
+   * terminal dimensions via stty since the SSH library doesn't expose
+   * a native PTY resize API.
+   */
+  async setupTerminal(cols: number, rows: number): Promise<void> {
+    if (!this.client || !this.shellStarted) return;
+    await this.client.writeToShell(
+      `export TERM=xterm-256color; stty cols ${cols} rows ${rows}; clear\n`,
+    );
+  }
+
+  /**
+   * Resize the remote terminal using stty.
+   * This is a workaround because the SSH library doesn't expose
+   * the SSH window-change message (RFC 4254).
+   */
+  async resizeShell(cols: number, rows: number): Promise<void> {
+    if (!this.client || !this.shellStarted) return;
+    await this.client.writeToShell(`stty cols ${cols} rows ${rows}\n`);
+  }
+
   disconnect(): void {
     try {
       if (this.client) {

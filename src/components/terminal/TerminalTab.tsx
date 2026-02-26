@@ -38,9 +38,20 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     };
   }, []);
 
+  // Track the latest known terminal dimensions
+  const termDimensionsRef = useRef<{ cols: number; rows: number }>({ cols: 80, rows: 24 });
+
   const handleTerminalData = useCallback((data: string) => {
     if (sshRef.current?.hasShell) {
       sshRef.current.write(data);
+    }
+  }, []);
+
+  const handleTerminalResize = useCallback(({ cols, rows }: { cols: number; rows: number }) => {
+    termDimensionsRef.current = { cols, rows };
+    // If shell is running, update the remote terminal size
+    if (sshRef.current?.hasShell) {
+      sshRef.current.resizeShell(cols, rows);
     }
   }, []);
 
@@ -91,6 +102,9 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       await ssh.connect(sshConfig);
       xtermRef.current?.write('\r\n\x1b[32mSSH connected. Starting shell...\x1b[0m\r\n');
       await ssh.startShell();
+      // Set TERM=xterm-256color for Ghostty compatibility and sync terminal dimensions
+      const { cols, rows } = termDimensionsRef.current;
+      await ssh.setupTerminal(cols, rows);
       xtermRef.current?.focus();
     } catch (err: any) {
       const msg = err?.message || String(err);
@@ -131,6 +145,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         <XTerm
           ref={xtermRef}
           onData={handleTerminalData}
+          onResize={handleTerminalResize}
           theme={{
             background: colors.surfaceElevated,
             foreground: colors.text,
