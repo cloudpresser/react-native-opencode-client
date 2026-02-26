@@ -1,6 +1,7 @@
 "use dom";
 
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import React, { useEffect, useRef, type Ref } from "react";
+import { useDOMImperativeHandle, type DOMImperativeFactory, type DOMProps } from "expo/dom";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 
@@ -167,14 +168,16 @@ const XTERM_CSS = `
 }
 `;
 
-export interface XTermRef {
-  write: (data: string) => void;
-  clear: () => void;
-  focus: () => void;
-  fit: () => void;
+export interface XTermRef extends DOMImperativeFactory {
+  write: (...args: any[]) => void;
+  clear: (...args: any[]) => void;
+  focus: (...args: any[]) => void;
+  fit: (...args: any[]) => void;
 }
 
 interface XTermProps {
+  ref: Ref<XTermRef>;
+  dom?: DOMProps;
   onData?: (data: string) => void;
   fontSize?: number;
   fontFamily?: string;
@@ -186,7 +189,8 @@ interface XTermProps {
   };
 }
 
-export default forwardRef<XTermRef, XTermProps>(({ 
+export default function XTerm({ 
+  ref,
   onData, 
   fontSize = 13, 
   fontFamily = 'Menlo, Monaco, "Courier New", monospace',
@@ -196,15 +200,17 @@ export default forwardRef<XTermRef, XTermProps>(({
     cursor: '#c0caf5',
     selection: '#33467c',
   }
-}, ref) => {
+}: XTermProps) {
   const divRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const onDataRef = useRef(onData);
+  onDataRef.current = onData;
 
-    useImperativeHandle(ref, () => ({
-    write: (data: string) => {
-      // console.log('XTerm write:', data.length, 'bytes');
-      xtermRef.current?.write(data);
+  useDOMImperativeHandle(ref, () => ({
+    write: (...args: any[]) => {
+      const data = args[0] as string;
+      if (data) xtermRef.current?.write(data);
     },
     clear: () => {
       xtermRef.current?.clear();
@@ -219,7 +225,7 @@ export default forwardRef<XTermRef, XTermProps>(({
         console.warn('XTerm fit error:', e);
       }
     }
-  }));
+  }), []);
 
   useEffect(() => {
     if (!divRef.current) return;
@@ -262,9 +268,7 @@ export default forwardRef<XTermRef, XTermProps>(({
     window.addEventListener('resize', handleResize);
 
     term.onData((data) => {
-      if (onData) {
-        onData(data);
-      }
+      onDataRef.current?.(data);
     });
     
     xtermRef.current = term;
@@ -292,4 +296,4 @@ export default forwardRef<XTermRef, XTermProps>(({
       />
     </>
   );
-});
+}
