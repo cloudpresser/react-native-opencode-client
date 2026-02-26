@@ -179,6 +179,7 @@ interface XTermProps {
   ref: Ref<XTermRef>;
   dom?: DOMProps;
   onData?: (data: string) => void;
+  onResize?: (dimensions: { cols: number; rows: number }) => void;
   fontSize?: number;
   fontFamily?: string;
   theme?: {
@@ -191,7 +192,8 @@ interface XTermProps {
 
 export default function XTerm({ 
   ref,
-  onData, 
+  onData,
+  onResize,
   fontSize = 13, 
   fontFamily = 'Menlo, Monaco, "Courier New", monospace',
   theme = {
@@ -206,6 +208,8 @@ export default function XTerm({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const onDataRef = useRef(onData);
   onDataRef.current = onData;
+  const onResizeRef = useRef(onResize);
+  onResizeRef.current = onResize;
 
   useDOMImperativeHandle(ref, () => ({
     write: (...args: any[]) => {
@@ -270,13 +274,24 @@ export default function XTerm({
     term.onData((data) => {
       onDataRef.current?.(data);
     });
+
+    term.onResize(({ cols, rows }) => {
+      onResizeRef.current?.({ cols, rows });
+    });
     
     xtermRef.current = term;
-    // console.log('XTerm initialized');
+
+    // Report initial dimensions after the first fit settles
+    const t3 = setTimeout(() => {
+      if (term.cols && term.rows) {
+        onResizeRef.current?.({ cols: term.cols, rows: term.rows });
+      }
+    }, 600);
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
       window.removeEventListener('resize', handleResize);
       term.dispose();
     };
