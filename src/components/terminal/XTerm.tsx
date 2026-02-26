@@ -201,8 +201,9 @@ export default forwardRef<XTermRef, XTermProps>(({
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
-  useImperativeHandle(ref, () => ({
+    useImperativeHandle(ref, () => ({
     write: (data: string) => {
+      // console.log('XTerm write:', data.length, 'bytes');
       xtermRef.current?.write(data);
     },
     clear: () => {
@@ -212,13 +213,18 @@ export default forwardRef<XTermRef, XTermProps>(({
       xtermRef.current?.focus();
     },
     fit: () => {
-      fitAddonRef.current?.fit();
+      try {
+        fitAddonRef.current?.fit();
+      } catch (e) {
+        console.warn('XTerm fit error:', e);
+      }
     }
   }));
 
   useEffect(() => {
     if (!divRef.current) return;
 
+    // console.log('XTerm mounting...');
     const term = new Terminal({
       cursorBlink: true,
       fontSize,
@@ -233,14 +239,24 @@ export default forwardRef<XTermRef, XTermProps>(({
 
     term.open(divRef.current);
     
-    // Initial fit
-    setTimeout(() => {
-      fitAddon.fit();
-    }, 100);
+    // Initial fit with retry strategy
+    const fit = () => {
+      try {
+        fitAddon.fit();
+        // console.log('XTerm fitted');
+      } catch (e) {
+        // console.warn('XTerm initial fit error:', e);
+      }
+    };
+
+    // Try to fit immediately and then after short delays to handle layout pass
+    fit();
+    const t1 = setTimeout(fit, 100);
+    const t2 = setTimeout(fit, 500);
 
     // Handle resizing
     const handleResize = () => {
-      fitAddon.fit();
+      fit();
     };
     
     window.addEventListener('resize', handleResize);
@@ -252,8 +268,11 @@ export default forwardRef<XTermRef, XTermProps>(({
     });
     
     xtermRef.current = term;
+    // console.log('XTerm initialized');
 
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       window.removeEventListener('resize', handleResize);
       term.dispose();
     };
