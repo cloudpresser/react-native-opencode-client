@@ -1,3 +1,11 @@
+## [2.14.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.14.0...v2.14.1) (2026-03-02)
+
+
+### Bug Fixes
+
+* properly load full message history and remove broken pagination ([efdcc7b](https://github.com/cloudpresser/react-native-opencode-client/commit/efdcc7b6fd641a6c98849ecd57baf7417e681d93))
+* resolve loading older messages and auto-scroll issues ([182745f](https://github.com/cloudpresser/react-native-opencode-client/commit/182745fc4b4cb401cb21bd40c355ee89bfeb8729))
+
 # [2.14.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.13.0...v2.14.0) (2026-03-02)
 
 
