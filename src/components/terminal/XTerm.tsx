@@ -4,6 +4,7 @@ import React, { useEffect, useRef, type Ref } from "react";
 import { useDOMImperativeHandle, type DOMImperativeFactory, type DOMProps } from "expo/dom";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
+import { WebglAddon } from "xterm-addon-webgl";
 
 const XTERM_CSS = `
 .xterm {
@@ -195,7 +196,7 @@ export default function XTerm({
   onData,
   onResize,
   fontSize = 13, 
-  fontFamily = 'Menlo, Monaco, "Courier New", monospace',
+  fontFamily = '"Cascadia Code", Menlo, Monaco, "Courier New", monospace',
   theme = {
     background: '#1a1b26',
     foreground: '#c0caf5',
@@ -246,6 +247,16 @@ export default function XTerm({
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     fitAddonRef.current = fitAddon;
+
+    try {
+      const webglAddon = new WebglAddon();
+      webglAddon.onContextLoss(() => {
+        webglAddon.dispose();
+      });
+      term.loadAddon(webglAddon);
+    } catch (e) {
+      console.warn('WebGL addon failed to load, falling back to DOM renderer', e);
+    }
 
     term.open(divRef.current);
     
@@ -307,6 +318,11 @@ export default function XTerm({
           height: 100%;
           overflow: hidden;
           background-color: ${theme.background};
+          touch-action: none;
+          overscroll-behavior: none;
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-text-size-adjust: 100%;
         }
       `}</style>
       <div 
