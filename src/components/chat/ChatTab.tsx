@@ -187,9 +187,9 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           setConnectedProviders(data.connected || []);
           setDefaultModelId(data.default);
           
-          const currentSelected = useStore.getState().selectedModels[session.id];
+          const currentSelected = useStore.getState().selectedModels?.[session.id];
           if (data.default && !currentSelected) {
-            useStore.getState().setSelectedModel(session.id, data.default);
+            useStore.getState().setSelectedModel?.(session.id, data.default);
           }
         }
       } catch (error) {
@@ -397,7 +397,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           },
         },
         selectedAgent,
-        selectedModels[session.id]
+        selectedModels?.[session.id]
       );
 
       setStreamingText('');
@@ -716,8 +716,8 @@ keyExtractor={(item: MessageAttachment) => item.id}
               providers={providers}
               connectedProviders={connectedProviders}
               defaultModelId={defaultModelId}
-              selectedModelId={selectedModels[session.id] || null}
-              onSelectModel={(modelId) => setSelectedModel(session.id, modelId)}
+              selectedModelId={selectedModels?.[session.id] || null}
+              onSelectModel={(modelId) => setSelectedModel?.(session.id, modelId)}
               loading={providersLoading}
             />
           </View>

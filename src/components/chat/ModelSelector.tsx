@@ -56,25 +56,28 @@ export default function ModelSelector({
     
     const query = searchQuery.toLowerCase();
     return providers.map(provider => {
-      const filteredModels = Object.values(provider.models).filter(
-        model => model.name.toLowerCase().includes(query) || model.id.toLowerCase().includes(query)
+      const modelsMap = provider.models || {};
+      const filteredModels = Object.values(modelsMap).filter(
+        model => (model.name || '').toLowerCase().includes(query) || (model.id || '').toLowerCase().includes(query)
       );
       
       return {
         ...provider,
         models: filteredModels.reduce((acc, model) => {
-          acc[model.id] = model;
+          if (model.id) {
+            acc[model.id] = model;
+          }
           return acc;
         }, {} as Record<string, Model>)
       };
-    }).filter(p => Object.keys(p.models).length > 0 || p.name.toLowerCase().includes(query));
+    }).filter(p => Object.keys(p.models || {}).length > 0 || (p.name || '').toLowerCase().includes(query));
   }, [providers, searchQuery]);
 
   // Find the display name of the selected model
   const selectedModelName = useMemo(() => {
     if (!selectedModelId) return 'Select Model';
     for (const p of providers) {
-      if (p.models[selectedModelId]) {
+      if (p.models && p.models[selectedModelId]) {
         return p.models[selectedModelId].name;
       }
     }
@@ -131,7 +134,7 @@ export default function ModelSelector({
 
             <ScrollView className="flex-1">
               {filteredProviders.map(provider => {
-                const modelEntries = Object.values(provider.models);
+                const modelEntries = Object.values(provider.models || {});
                 if (modelEntries.length === 0) return null;
                 
                 const isExpanded = expandedProviders[provider.id] || searchQuery.length > 0;
