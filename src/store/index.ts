@@ -39,11 +39,9 @@ interface AppState {
 
   // Chat
   messages: Record<string, ChatMessage[]>;
-  hasMoreMessages: Record<string, boolean>;
   addMessage: (sessionId: string, message: ChatMessage) => void;
   setMessages: (sessionId: string, messages: ChatMessage[]) => void;
   prependMessages: (sessionId: string, messages: ChatMessage[]) => void;
-  setHasMoreMessages: (sessionId: string, hasMore: boolean) => void;
   clearMessages: (sessionId: string) => void;
 
   // Notification suppression
@@ -213,7 +211,6 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Chat
   messages: {},
-  hasMoreMessages: {},
   
   addMessage: (sessionId: string, message: ChatMessage) => {
     const messages = get().messages;
@@ -233,17 +230,10 @@ export const useStore = create<AppState>((set, get) => ({
     set({ messages: { ...messages, [sessionId]: [...olderMessages, ...sessionMessages] } });
   },
   
-  setHasMoreMessages: (sessionId: string, hasMore: boolean) => {
-    const hasMoreMessages = get().hasMoreMessages;
-    set({ hasMoreMessages: { ...hasMoreMessages, [sessionId]: hasMore } });
-  },
-  
   clearMessages: (sessionId: string) => {
     const messages = { ...get().messages };
-    const hasMoreMessages = { ...get().hasMoreMessages };
     delete messages[sessionId];
-    delete hasMoreMessages[sessionId];
-    set({ messages, hasMoreMessages });
+    set({ messages });
   },
 
   // Notification suppression
