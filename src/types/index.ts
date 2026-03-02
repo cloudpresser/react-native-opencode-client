@@ -163,6 +163,26 @@ export interface Agent {
   native?: boolean;
 }
 
+export interface Model {
+  id: string;
+  providerID: string;
+  name: string;
+  family?: string;
+  status?: string;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  models: Record<string, Model>;
+}
+
+export interface ProvidersResponse {
+  all: Provider[];
+  connected: string[];
+  default: string;
+}
+
 export interface TerminalState {
   history: string[];
   currentInput: string;
