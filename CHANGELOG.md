@@ -1,3 +1,10 @@
+# [2.14.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.13.0...v2.14.0) (2026-03-02)
+
+
+### Features
+
+* make session name editable from session screen ([bf4e8fb](https://github.com/cloudpresser/react-native-opencode-client/commit/bf4e8fb773a442680bc150c3dcd5fedaafb4747e))
+
 # [2.13.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.12.0...v2.13.0) (2026-02-26)
 
 
