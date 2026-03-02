@@ -184,12 +184,20 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         const data = await service.getProviders();
         if (data) {
           setProviders(data.all || []);
-          setConnectedProviders(data.connected || []);
-          setDefaultModelId(data.default);
-          
+          const connected = data.connected || [];
+          setConnectedProviders(connected);
+
+          // data.default is a Record<providerID, modelID> — resolve to a single model string
+          const defaults = data.default || {};
+          const resolvedDefault = connected.length > 0
+            ? defaults[connected[0]]
+            : Object.values(defaults)[0];
+
+          setDefaultModelId(resolvedDefault);
+
           const currentSelected = useStore.getState().selectedModels?.[session.id];
-          if (data.default && !currentSelected) {
-            useStore.getState().setSelectedModel?.(session.id, data.default);
+          if (resolvedDefault && !currentSelected) {
+            useStore.getState().setSelectedModel?.(session.id, resolvedDefault);
           }
         }
       } catch (error) {

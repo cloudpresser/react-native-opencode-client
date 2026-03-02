@@ -180,7 +180,7 @@ export interface Provider {
 export interface ProvidersResponse {
   all: Provider[];
   connected: string[];
-  default: string;
+  default: Record<string, string>;
 }
 
 export interface TerminalState {

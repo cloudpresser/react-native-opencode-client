@@ -77,7 +77,7 @@ export default function ModelSelector({
 
   // Find the display name of the selected model
   const selectedModelName = useMemo(() => {
-    if (!selectedModelId) return 'Select Model';
+    if (!selectedModelId || typeof selectedModelId !== 'string') return 'Select Model';
     for (const p of providers) {
       if (p.models && p.models[selectedModelId]) {
         return p.models[selectedModelId].name;
