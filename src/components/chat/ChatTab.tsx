@@ -38,9 +38,6 @@ interface ChatTabProps {
   server: Server;
 }
 
-const INITIAL_LOAD_LIMIT = 10;
-const PAGINATION_LIMIT = 10;
-
 function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
   const chatParts: ChatMessagePart[] = [];
   const attachments: MessageAttachment[] = [];
@@ -113,16 +110,16 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
 
 export default function ChatTab({ session, server }: ChatTabProps) {
   const colors = useThemeColors();
-  const { messages, hasMoreMessages, addMessage, setMessages, prependMessages, setHasMoreMessages, setViewedSessionId } = useStore();
+  const { messages, addMessage, setMessages, prependMessages, setViewedSessionId } = useStore();
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [streamingText, setStreamingText] = useState('');
   const [pendingQuestion, setPendingQuestion] = useState<QuestionAskedEvent | null>(null);
   const [pendingPermission, setPendingPermission] = useState<PermissionAskedEvent | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
   const [selectedAgent, setSelectedAgent] = useState<string>('');
@@ -141,7 +138,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   // ─── Refetch messages when app resumes from background ───
   useAppStateRefresh(useCallback(async () => {
     try {
-      const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+      const apiMessages = await service.getMessages(session.id);
       const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
       setMessages(session.id, chatMessages);
     } catch (err) {
@@ -185,61 +182,36 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   }, []);
 
   const sessionMessages = messages[session.id] || [];
-  const canLoadMore = hasMoreMessages[session.id] ?? true;
 
   const loadInitialMessages = useCallback(async () => {
     try {
       setInitialLoading(true);
-      const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+      const apiMessages = await service.getMessages(session.id);
       const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
       setMessages(session.id, chatMessages);
-      setHasMoreMessages(session.id, apiMessages.length === INITIAL_LOAD_LIMIT);
     } catch (error) {
       console.error('Error loading initial messages:', error);
       Alert.alert('Error', 'Failed to load messages from server');
     } finally {
       setInitialLoading(false);
     }
-  }, [session.id, service, setMessages, setHasMoreMessages]);
-
-  const loadOlderMessages = useCallback(async () => {
-    if (loadingMore || !canLoadMore || sessionMessages.length === 0) return;
-
-    try {
-      setLoadingMore(true);
-      const oldestMessage = sessionMessages[0];
-      const apiMessages = await service.getMessages(
-        session.id,
-        PAGINATION_LIMIT,
-        oldestMessage.timestamp
-      );
-      
-      if (apiMessages.length > 0) {
-        const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
-        prependMessages(session.id, chatMessages);
-        setHasMoreMessages(session.id, apiMessages.length === PAGINATION_LIMIT);
-      } else {
-        setHasMoreMessages(session.id, false);
-      }
-    } catch (error) {
-      console.error('Error loading older messages:', error);
-      Alert.alert('Error', 'Failed to load older messages');
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [loadingMore, canLoadMore, sessionMessages, session.id, service, prependMessages, setHasMoreMessages]);
+  }, [session.id, service, setMessages]);
 
   useEffect(() => {
     loadInitialMessages();
   }, [loadInitialMessages]);
 
   useEffect(() => {
-    if (sessionMessages.length > 0 && !initialLoading && !loadingMore) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+    if (sessionMessages.length > 0 && !initialLoading) {
+      const currentLastMessage = sessionMessages[sessionMessages.length - 1];
+      if (currentLastMessage.id !== lastMessageIdRef.current) {
+        lastMessageIdRef.current = currentLastMessage.id;
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
     }
-  }, [sessionMessages.length, initialLoading, loadingMore]);
+  }, [sessionMessages.length, initialLoading]);
 
   const handlePickFile = async () => {
     try {
@@ -385,7 +357,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             // Fetch final messages from server to get rich parts
             // (tool calls, reasoning blocks, attachments, etc.)
             try {
-              const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+              const apiMessages = await service.getMessages(session.id);
               const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
               setMessages(session.id, chatMessages);
             } catch (err) {
@@ -401,7 +373,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
       console.error('Error sending message:', error);
       // On SSE failure, try to reload messages from server
       try {
-        const apiMessages = await service.getMessages(session.id, INITIAL_LOAD_LIMIT);
+        const apiMessages = await service.getMessages(session.id);
         const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
         setMessages(session.id, chatMessages);
       } catch (_) {}
@@ -597,25 +569,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     </View>
   );
 
-  const renderLoadMoreHeader = () => {
-    if (!canLoadMore || sessionMessages.length === 0) return null;
-    
-    return (
-      <TouchableOpacity 
-        onPress={loadOlderMessages}
-        disabled={loadingMore}
-        className="items-center py-3 mb-2"
-        testID="load-more-button"
-      >
-        {loadingMore ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <Text className="text-primary text-sm font-medium">Load older messages</Text>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
   if (initialLoading) {
     return (
       <View className="flex-1 bg-background items-center justify-center" testID="chat-tab">
@@ -639,7 +592,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         keyExtractor={(item: ChatMessage) => item.id}
         contentContainerClassName="p-4"
         testID="messages-list"
-        ListHeaderComponent={renderLoadMoreHeader}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         ListEmptyComponent={
           <View className="items-center justify-center pt-16" testID="empty-messages">
             <Text className="text-lg font-semibold text-text-muted mb-2">No messages yet</Text>
@@ -689,15 +642,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
               )}
             </View>
           ) : null
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={loadingMore}
-            onRefresh={loadOlderMessages}
-            tintColor={colors.primary}
-            title={canLoadMore ? "Pull to load older messages" : "No older messages"}
-            titleColor={colors.textMuted}
-          />
         }
       />
 
