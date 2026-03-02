@@ -156,6 +156,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       <View style={{ flex: 1, backgroundColor: colors.surfaceElevated }}>
         <XTerm
           ref={xtermRef}
+          dom={{ style: { flex: 1 } }}
           onData={handleTerminalData}
           onResize={handleTerminalResize}
           theme={{
