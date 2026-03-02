@@ -112,7 +112,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
 
 export default function ChatTab({ session, server }: ChatTabProps) {
   const colors = useThemeColors();
-  const { messages, hasMoreMessages, addMessage, setMessages, prependMessages, setHasMoreMessages, setViewedSessionId, selectedModels, setSelectedModel } = useStore();
+  const { messages, addMessage, setMessages, prependMessages, setViewedSessionId, selectedModels, setSelectedModel } = useStore();
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [loading, setLoading] = useState(false);

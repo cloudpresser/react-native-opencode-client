@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,10 +33,11 @@ export default function ModelSelector({
   const [showPicker, setShowPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
+  const hasInitialized = useRef(false);
 
   // Auto-expand connected providers initially
   useEffect(() => {
-    if (providers.length > 0 && Object.keys(expandedProviders).length === 0) {
+    if (providers.length > 0 && !hasInitialized.current) {
       const initialExpanded: Record<string, boolean> = {};
       providers.forEach(p => {
         if (connectedProviders.includes(p.id)) {
@@ -44,8 +45,9 @@ export default function ModelSelector({
         }
       });
       setExpandedProviders(initialExpanded);
+      hasInitialized.current = true;
     }
-  }, [providers, connectedProviders, expandedProviders]);
+  }, [providers, connectedProviders]);
 
   const toggleProvider = (providerId: string) => {
     setExpandedProviders(prev => ({ ...prev, [providerId]: !prev[providerId] }));
