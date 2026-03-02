@@ -269,6 +269,24 @@ export class OpenCodeService {
     }
   }
 
+  async updateSession(sessionId: string, title: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/session/${sessionId}`, {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ title }),
+      });
+      if (!response.ok) {
+        console.error(`Failed to update session: ${response.status}`);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error updating session:', error);
+      return false;
+    }
+  }
+
   async deleteSession(sessionId: string): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/session/${sessionId}`, {

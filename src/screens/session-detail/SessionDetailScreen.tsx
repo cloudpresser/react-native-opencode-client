@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, TouchableOpacity, Text, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, TouchableOpacity, Text, Alert, TextInput } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useRoute, RouteProp, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,10 +10,69 @@ import ChatTab from '../../components/chat/ChatTab';
 import GitViewerTab from '../../components/git-viewer/GitViewerTab';
 import TerminalTab from '../../components/terminal/TerminalTab';
 import FileAnnotationTab from '../../components/file-annotation/FileAnnotationTab';
+import { OpenCodeService } from '../../services/opencode';
+import { Session, Server } from '../../types';
 
 type SessionDetailRouteProp = RouteProp<RootStackParamList, 'SessionDetail'>;
 
 const Tab = createBottomTabNavigator();
+
+function SessionTitleEditor({ session, server }: { session: Session; server: Server }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(session.title);
+  const colors = useThemeColors();
+  const inputRef = useRef<TextInput>(null);
+  const { updateSession } = useStore();
+
+  useEffect(() => {
+    setTitle(session.title);
+  }, [session.title]);
+
+  useEffect(() => {
+    if (isEditing) {
+      // Small timeout to ensure the input is mounted before focusing
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isEditing]);
+
+  const handleSave = async () => {
+    setIsEditing(false);
+    if (title.trim() === '' || title === session.title) {
+      setTitle(session.title);
+      return;
+    }
+    
+    // Update locally
+    await updateSession(session.id, { title: title.trim() });
+    
+    // Update backend
+    const service = new OpenCodeService(server);
+    await service.updateSession(session.id, title.trim());
+  };
+
+  if (isEditing) {
+    return (
+      <TextInput
+        ref={inputRef}
+        value={title}
+        onChangeText={setTitle}
+        onBlur={handleSave}
+        onSubmitEditing={handleSave}
+        style={{ color: colors.text, fontSize: 18, fontWeight: '600', minWidth: 150 }}
+        placeholderTextColor={colors.textMuted}
+        returnKeyType="done"
+      />
+    );
+  }
+
+  return (
+    <TouchableOpacity onPress={() => setIsEditing(true)}>
+      <Text style={{ color: colors.text, fontSize: 18, fontWeight: '600' }} numberOfLines={1}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function SessionDetailScreen() {
   const route = useRoute<SessionDetailRouteProp>();
@@ -60,7 +119,7 @@ export default function SessionDetailScreen() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         headerShown: true,
-        headerTitle: session.title,
+        headerTitle: () => <SessionTitleEditor session={session} server={server} />,
         headerStyle: {
           backgroundColor: colors.surface,
         },
