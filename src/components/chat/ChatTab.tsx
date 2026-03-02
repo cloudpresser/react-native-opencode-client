@@ -29,6 +29,8 @@ import MarkdownRenderer from './MarkdownRenderer';
 import ToolCallDisplay from './ToolCallDisplay';
 import QuestionDisplay from './QuestionDisplay';
 import PermissionDisplay from './PermissionDisplay';
+import ModelSelector from './ModelSelector';
+import { Provider } from '../../types';
 
 const StyledImage = withUniwind(Image);
 const StyledActivityIndicator = withUniwind(ActivityIndicator);
@@ -110,7 +112,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
 
 export default function ChatTab({ session, server }: ChatTabProps) {
   const colors = useThemeColors();
-  const { messages, addMessage, setMessages, prependMessages, setViewedSessionId } = useStore();
+  const { messages, addMessage, setMessages, prependMessages, setViewedSessionId, selectedModels, setSelectedModel } = useStore();
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -126,6 +128,11 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
+
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [defaultModelId, setDefaultModelId] = useState<string | undefined>(undefined);
+  const [providersLoading, setProvidersLoading] = useState(true);
 
   // ─── Notification suppression: report which session is being viewed ───
   useFocusEffect(
@@ -169,6 +176,38 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     };
     loadAgents();
   }, [service]);
+
+  useEffect(() => {
+    const loadProviders = async () => {
+      try {
+        setProvidersLoading(true);
+        const data = await service.getProviders();
+        if (data) {
+          setProviders(data.all || []);
+          const connected = data.connected || [];
+          setConnectedProviders(connected);
+
+          // data.default is a Record<providerID, modelID> — resolve to a single model string
+          const defaults = data.default || {};
+          const resolvedDefault = connected.length > 0
+            ? defaults[connected[0]]
+            : Object.values(defaults)[0];
+
+          setDefaultModelId(resolvedDefault);
+
+          const currentSelected = useStore.getState().selectedModels?.[session.id];
+          if (resolvedDefault && !currentSelected) {
+            useStore.getState().setSelectedModel?.(session.id, resolvedDefault);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading providers:', error);
+      } finally {
+        setProvidersLoading(false);
+      }
+    };
+    loadProviders();
+  }, [service, session.id]);
 
   // Auto-scroll to bottom when keyboard opens
   useEffect(() => {
@@ -365,7 +404,8 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             }
           },
         },
-        selectedAgent
+        selectedAgent,
+        selectedModels?.[session.id]
       );
 
       setStreamingText('');
@@ -657,23 +697,38 @@ keyExtractor={(item: MessageAttachment) => item.id}
       )}
 
       <View className="bg-surface border-t border-border">
-        {/* Agent selector row */}
-        <View className="flex-row items-center px-3 pt-2 pb-1">
-          <Text className="text-text-subtle text-xs mr-2">Agent:</Text>
-          {agentsLoading ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : agents.length > 0 ? (
-            <TouchableOpacity
-              onPress={() => setShowAgentPicker(true)}
-              className="flex-row items-center bg-surface-elevated px-2.5 py-1 rounded-full border border-border"
-              testID="agent-selector"
-            >
-              <Text className="text-text text-xs font-medium">{agents.find(a => a.name === selectedAgent)?.name ?? selectedAgent}</Text>
-              <Text className="text-text-muted text-[10px] ml-1">▼</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text className="text-text-subtle text-xs">No agents available</Text>
-          )}
+        {/* Agent and Model selector row */}
+        <View className="flex-row items-center px-3 pt-2 pb-1 justify-between z-10">
+          <View className="flex-row items-center flex-1 pr-2">
+            <Text className="text-text-subtle text-xs mr-2">Agent:</Text>
+            {agentsLoading ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : agents.length > 0 ? (
+              <TouchableOpacity
+                onPress={() => setShowAgentPicker(true)}
+                className="flex-row items-center bg-surface-elevated px-2.5 py-1 rounded-full border border-border flex-shrink"
+                testID="agent-selector"
+              >
+                <Text className="text-text text-xs font-medium" numberOfLines={1} ellipsizeMode="tail">
+                  {agents.find(a => a.name === selectedAgent)?.name ?? selectedAgent}
+                </Text>
+                <Text className="text-text-muted text-[10px] ml-1">▼</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text className="text-text-subtle text-xs">No agents available</Text>
+            )}
+          </View>
+          
+          <View className="flex-row items-center flex-1 justify-end">
+            <ModelSelector
+              providers={providers}
+              connectedProviders={connectedProviders}
+              defaultModelId={defaultModelId}
+              selectedModelId={selectedModels?.[session.id] || null}
+              onSelectModel={(modelId) => setSelectedModel?.(session.id, modelId)}
+              loading={providersLoading}
+            />
+          </View>
         </View>
 
         {/* Input row */}

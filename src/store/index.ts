@@ -57,6 +57,10 @@ interface AppState {
   addFileAnnotation: (sessionId: string, annotation: FileAnnotation) => void;
   removeFileAnnotation: (sessionId: string, filePath: string) => void;
   clearFileAnnotations: (sessionId: string) => void;
+
+  // Models
+  selectedModels: Record<string, string>;
+  setSelectedModel: (sessionId: string, modelId: string) => void;
 }
 
 const SERVERS_KEY = '@opencode_servers';
@@ -267,5 +271,12 @@ export const useStore = create<AppState>((set, get) => ({
     const fileAnnotations = { ...get().fileAnnotations };
     delete fileAnnotations[sessionId];
     set({ fileAnnotations });
+  },
+
+  // Models
+  selectedModels: {},
+  setSelectedModel: (sessionId: string, modelId: string) => {
+    const selectedModels = { ...get().selectedModels, [sessionId]: modelId };
+    set({ selectedModels });
   },
 }));

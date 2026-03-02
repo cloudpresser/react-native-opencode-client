@@ -1,4 +1,4 @@
-import { Server, Session, GitFile, Project, FileNode, Agent } from '../types';
+import { Server, Session, GitFile, Project, FileNode, Agent, ProvidersResponse } from '../types';
 import EventSource from 'react-native-sse';
 import base64 from 'base-64';
 
@@ -245,6 +245,19 @@ export class OpenCodeService {
     }
   }
 
+  async getProviders(): Promise<ProvidersResponse | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/provider`, {
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch providers');
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching providers:', error);
+      return null;
+    }
+  }
+
   async createSession(title: string, directory?: string): Promise<Session | null> {
     try {
       const params = new URLSearchParams();
@@ -427,7 +440,8 @@ export class OpenCodeService {
       onPermissionAsked?: (event: PermissionAskedEvent) => void;
       onComplete?: () => void;
     },
-    agentId?: string
+    agentId?: string,
+    modelId?: string
   ): Promise<void> {
     // Prepare message parts
     const parts: MessagePart[] = [
@@ -475,6 +489,9 @@ export class OpenCodeService {
             const asyncBody: Record<string, any> = { parts };
             if (agentId) {
               asyncBody.agentID = agentId;
+            }
+            if (modelId) {
+              asyncBody.modelID = modelId;
             }
             fetch(`${this.baseUrl}/session/${sessionId}/prompt_async`, {
               method: 'POST',
