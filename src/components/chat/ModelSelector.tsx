@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Keyboard,
 } from 'react-native';
 import { Provider, Model } from '../../types';
 import { useThemeColors } from '../../hooks/useThemeColors';
@@ -94,7 +95,29 @@ export default function ModelSelector({
     return selectedModelId.split('/').pop() || selectedModelId;
   }, [selectedModelId, providers]);
 
-  const maxScrollHeight = Dimensions.get('window').height * 0.5;
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const windowHeight = Dimensions.get('window').height;
+  // Reserve space for: header (~50), search input (~50), bottom padding (~40)
+  const chromeHeight = 140;
+  const maxScrollHeight = windowHeight * 0.6 - keyboardHeight - chromeHeight;
 
   return (
     <>
@@ -125,7 +148,7 @@ export default function ModelSelector({
       >
         <KeyboardAvoidingView
           className="flex-1"
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
         >
           <Pressable
             className="flex-1 bg-overlay justify-end"
@@ -149,7 +172,7 @@ export default function ModelSelector({
                   autoCapitalize="none"
                 />
 
-                <ScrollView style={{ maxHeight: maxScrollHeight }}>
+                <ScrollView style={{ maxHeight: Math.max(maxScrollHeight, 120) }} keyboardShouldPersistTaps="handled">
                   {filteredProviders.map(provider => {
                     const modelEntries = Object.values(provider.models || {});
                     if (modelEntries.length === 0) return null;
