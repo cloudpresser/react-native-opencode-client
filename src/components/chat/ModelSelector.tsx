@@ -36,7 +36,6 @@ export default function ModelSelector({
   const [showPicker, setShowPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
-  const [showAllProviders, setShowAllProviders] = useState(false);
   const hasInitialized = useRef(false);
 
   // Auto-expand connected providers initially
@@ -57,17 +56,16 @@ export default function ModelSelector({
     setExpandedProviders(prev => ({ ...prev, [providerId]: !prev[providerId] }));
   };
 
-  // Only show connected providers by default; show all when searching or toggled
-  const visibleProviders = useMemo(() => {
-    if (searchQuery.trim() || showAllProviders) return providers;
+  // Only show providers that have auth configured (i.e. are connected)
+  const connectedProviderList = useMemo(() => {
     return providers.filter(p => connectedProviders.includes(p.id));
-  }, [providers, connectedProviders, searchQuery, showAllProviders]);
+  }, [providers, connectedProviders]);
 
   const filteredProviders = useMemo(() => {
-    if (!searchQuery.trim()) return visibleProviders;
+    if (!searchQuery.trim()) return connectedProviderList;
     
     const query = searchQuery.toLowerCase();
-    return visibleProviders.map(provider => {
+    return connectedProviderList.map(provider => {
       const modelsMap = provider.models || {};
       const filteredModels = Object.values(modelsMap).filter(
         model => (model.name || '').toLowerCase().includes(query) || (model.id || '').toLowerCase().includes(query)
@@ -83,9 +81,7 @@ export default function ModelSelector({
         }, {} as Record<string, Model>)
       };
     }).filter(p => Object.keys(p.models || {}).length > 0 || (p.name || '').toLowerCase().includes(query));
-  }, [visibleProviders, searchQuery]);
-
-  const disconnectedCount = providers.length - providers.filter(p => connectedProviders.includes(p.id)).length;
+  }, [connectedProviderList, searchQuery]);
 
   // Find the display name of the selected model
   const selectedModelName = useMemo(() => {
@@ -166,12 +162,7 @@ export default function ModelSelector({
                           className="flex-row justify-between items-center bg-surface-elevated p-3 rounded-lg"
                           onPress={() => toggleProvider(provider.id)}
                         >
-                          <View className="flex-row items-center">
-                            <Text className="text-text font-medium">{provider.name}</Text>
-                            {!connectedProviders.includes(provider.id) && (
-                              <Text className="text-text-subtle text-[10px] ml-2 px-1 border border-border rounded">Not Connected</Text>
-                            )}
-                          </View>
+                      <Text className="text-text font-medium">{provider.name}</Text>
                           <Text className="text-text-muted">{isExpanded ? '▲' : '▼'}</Text>
                         </TouchableOpacity>
 
@@ -219,18 +210,7 @@ export default function ModelSelector({
                   )}
                 </ScrollView>
 
-                {!searchQuery.trim() && disconnectedCount > 0 && (
-                  <TouchableOpacity
-                    className="mt-3 py-2 items-center"
-                    onPress={() => setShowAllProviders(prev => !prev)}
-                  >
-                    <Text className="text-primary text-xs">
-                      {showAllProviders
-                        ? 'Show connected only'
-                        : `Show all providers (+${disconnectedCount} disconnected)`}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+
               </View>
             </Pressable>
           </Pressable>
