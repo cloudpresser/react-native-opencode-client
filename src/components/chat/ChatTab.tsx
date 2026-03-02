@@ -123,6 +123,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [pendingQuestion, setPendingQuestion] = useState<QuestionAskedEvent | null>(null);
   const [pendingPermission, setPendingPermission] = useState<PermissionAskedEvent | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
   const [selectedAgent, setSelectedAgent] = useState<string>('');
@@ -211,7 +212,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
       const apiMessages = await service.getMessages(
         session.id,
         PAGINATION_LIMIT,
-        oldestMessage.timestamp
+        oldestMessage.id
       );
       
       if (apiMessages.length > 0) {
@@ -235,9 +236,13 @@ export default function ChatTab({ session, server }: ChatTabProps) {
 
   useEffect(() => {
     if (sessionMessages.length > 0 && !initialLoading && !loadingMore) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      const currentLastMessage = sessionMessages[sessionMessages.length - 1];
+      if (currentLastMessage.id !== lastMessageIdRef.current) {
+        lastMessageIdRef.current = currentLastMessage.id;
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
     }
   }, [sessionMessages.length, initialLoading, loadingMore]);
 
@@ -639,6 +644,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         keyExtractor={(item: ChatMessage) => item.id}
         contentContainerClassName="p-4"
         testID="messages-list"
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         ListHeaderComponent={renderLoadMoreHeader}
         ListEmptyComponent={
           <View className="items-center justify-center pt-16" testID="empty-messages">
