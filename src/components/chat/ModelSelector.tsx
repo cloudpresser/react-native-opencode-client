@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   TextInput,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import { Provider, Model } from '../../types';
 import { useThemeColors } from '../../hooks/useThemeColors';
@@ -33,6 +36,7 @@ export default function ModelSelector({
   const [showPicker, setShowPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
+  const [showAllProviders, setShowAllProviders] = useState(false);
   const hasInitialized = useRef(false);
 
   // Auto-expand connected providers initially
@@ -53,11 +57,17 @@ export default function ModelSelector({
     setExpandedProviders(prev => ({ ...prev, [providerId]: !prev[providerId] }));
   };
 
+  // Only show connected providers by default; show all when searching or toggled
+  const visibleProviders = useMemo(() => {
+    if (searchQuery.trim() || showAllProviders) return providers;
+    return providers.filter(p => connectedProviders.includes(p.id));
+  }, [providers, connectedProviders, searchQuery, showAllProviders]);
+
   const filteredProviders = useMemo(() => {
-    if (!searchQuery.trim()) return providers;
+    if (!searchQuery.trim()) return visibleProviders;
     
     const query = searchQuery.toLowerCase();
-    return providers.map(provider => {
+    return visibleProviders.map(provider => {
       const modelsMap = provider.models || {};
       const filteredModels = Object.values(modelsMap).filter(
         model => (model.name || '').toLowerCase().includes(query) || (model.id || '').toLowerCase().includes(query)
@@ -73,7 +83,9 @@ export default function ModelSelector({
         }, {} as Record<string, Model>)
       };
     }).filter(p => Object.keys(p.models || {}).length > 0 || (p.name || '').toLowerCase().includes(query));
-  }, [providers, searchQuery]);
+  }, [visibleProviders, searchQuery]);
+
+  const disconnectedCount = providers.length - providers.filter(p => connectedProviders.includes(p.id)).length;
 
   // Find the display name of the selected model
   const selectedModelName = useMemo(() => {
@@ -85,6 +97,8 @@ export default function ModelSelector({
     }
     return selectedModelId.split('/').pop() || selectedModelId;
   }, [selectedModelId, providers]);
+
+  const maxScrollHeight = Dimensions.get('window').height * 0.5;
 
   return (
     <>
@@ -113,94 +127,114 @@ export default function ModelSelector({
         animationType="fade"
         onRequestClose={() => setShowPicker(false)}
       >
-        <Pressable
-          className="flex-1 bg-overlay justify-end"
-          onPress={() => setShowPicker(false)}
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View className="bg-surface rounded-t-2xl p-4 pb-8 max-h-[80%]">
-            <View className="flex-row justify-between items-center mb-3">
-              <Text className="text-text font-semibold text-base">Select Model</Text>
-              <TouchableOpacity onPress={() => setShowPicker(false)}>
-                <Text className="text-text-muted text-xl">×</Text>
-              </TouchableOpacity>
-            </View>
+          <Pressable
+            className="flex-1 bg-overlay justify-end"
+            onPress={() => setShowPicker(false)}
+          >
+            <Pressable onPress={() => {/* stop propagation — prevent dismiss when tapping content */}}>
+              <View className="bg-surface rounded-t-2xl p-4 pb-8">
+                <View className="flex-row justify-between items-center mb-3">
+                  <Text className="text-text font-semibold text-base">Select Model</Text>
+                  <TouchableOpacity onPress={() => setShowPicker(false)}>
+                    <Text className="text-text-muted text-xl">×</Text>
+                  </TouchableOpacity>
+                </View>
 
-            <TextInput
-              className="border border-border rounded-lg px-3 py-2 text-text mb-4 bg-background"
-              placeholder="Search models..."
-              placeholderTextColor={colors.textSubtle}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-            />
+                <TextInput
+                  className="border border-border rounded-lg px-3 py-2 text-text mb-4 bg-background"
+                  placeholder="Search models..."
+                  placeholderTextColor={colors.textSubtle}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                />
 
-            <ScrollView className="flex-1">
-              {filteredProviders.map(provider => {
-                const modelEntries = Object.values(provider.models || {});
-                if (modelEntries.length === 0) return null;
-                
-                const isExpanded = expandedProviders[provider.id] || searchQuery.length > 0;
-                
-                return (
-                  <View key={provider.id} className="mb-2">
-                    <TouchableOpacity
-                      className="flex-row justify-between items-center bg-surface-elevated p-3 rounded-lg"
-                      onPress={() => toggleProvider(provider.id)}
-                    >
-                      <View className="flex-row items-center">
-                        <Text className="text-text font-medium">{provider.name}</Text>
-                        {!connectedProviders.includes(provider.id) && (
-                          <Text className="text-text-subtle text-[10px] ml-2 px-1 border border-border rounded">Not Connected</Text>
+                <ScrollView style={{ maxHeight: maxScrollHeight }}>
+                  {filteredProviders.map(provider => {
+                    const modelEntries = Object.values(provider.models || {});
+                    if (modelEntries.length === 0) return null;
+                    
+                    const isExpanded = expandedProviders[provider.id] || searchQuery.length > 0;
+                    
+                    return (
+                      <View key={provider.id} className="mb-2">
+                        <TouchableOpacity
+                          className="flex-row justify-between items-center bg-surface-elevated p-3 rounded-lg"
+                          onPress={() => toggleProvider(provider.id)}
+                        >
+                          <View className="flex-row items-center">
+                            <Text className="text-text font-medium">{provider.name}</Text>
+                            {!connectedProviders.includes(provider.id) && (
+                              <Text className="text-text-subtle text-[10px] ml-2 px-1 border border-border rounded">Not Connected</Text>
+                            )}
+                          </View>
+                          <Text className="text-text-muted">{isExpanded ? '▲' : '▼'}</Text>
+                        </TouchableOpacity>
+
+                        {isExpanded && (
+                          <View className="mt-1 ml-2">
+                            {modelEntries.map(model => {
+                              const isSelected = selectedModelId === model.id;
+                              const isDefault = defaultModelId === model.id;
+                              
+                              return (
+                                <TouchableOpacity
+                                  key={model.id}
+                                  className={`flex-row items-center justify-between p-3 rounded-lg mb-1 ${isSelected ? 'bg-primary/10 border border-primary' : 'border border-transparent'}`}
+                                  onPress={() => {
+                                    onSelectModel(model.id);
+                                    setShowPicker(false);
+                                  }}
+                                >
+                                  <View className="flex-1">
+                                    <View className="flex-row items-center">
+                                      <Text className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-text'}`}>
+                                        {model.name}
+                                      </Text>
+                                      {isDefault && (
+                                        <Text className="text-[10px] text-info ml-2 border border-info px-1 rounded">Default</Text>
+                                      )}
+                                    </View>
+                                    {model.family && (
+                                      <Text className="text-text-subtle text-xs mt-0.5">{model.family}</Text>
+                                    )}
+                                  </View>
+                                  {isSelected && (
+                                    <Text className="text-primary text-sm">✓</Text>
+                                  )}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
                         )}
                       </View>
-                      <Text className="text-text-muted">{isExpanded ? '▲' : '▼'}</Text>
-                    </TouchableOpacity>
+                    );
+                  })}
+                  {filteredProviders.length === 0 && (
+                    <Text className="text-text-muted text-center py-4">No models found</Text>
+                  )}
+                </ScrollView>
 
-                    {isExpanded && (
-                      <View className="mt-1 ml-2">
-                        {modelEntries.map(model => {
-                          const isSelected = selectedModelId === model.id;
-                          const isDefault = defaultModelId === model.id;
-                          
-                          return (
-                            <TouchableOpacity
-                              key={model.id}
-                              className={`flex-row items-center justify-between p-3 rounded-lg mb-1 ${isSelected ? 'bg-primary/10 border border-primary' : 'border border-transparent'}`}
-                              onPress={() => {
-                                onSelectModel(model.id);
-                                setShowPicker(false);
-                              }}
-                            >
-                              <View className="flex-1">
-                                <View className="flex-row items-center">
-                                  <Text className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-text'}`}>
-                                    {model.name}
-                                  </Text>
-                                  {isDefault && (
-                                    <Text className="text-[10px] text-info ml-2 border border-info px-1 rounded">Default</Text>
-                                  )}
-                                </View>
-                                {model.family && (
-                                  <Text className="text-text-subtle text-xs mt-0.5">{model.family}</Text>
-                                )}
-                              </View>
-                              {isSelected && (
-                                <Text className="text-primary text-sm">✓</Text>
-                              )}
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-              {filteredProviders.length === 0 && (
-                <Text className="text-text-muted text-center py-4">No models found</Text>
-              )}
-            </ScrollView>
-          </View>
-        </Pressable>
+                {!searchQuery.trim() && disconnectedCount > 0 && (
+                  <TouchableOpacity
+                    className="mt-3 py-2 items-center"
+                    onPress={() => setShowAllProviders(prev => !prev)}
+                  >
+                    <Text className="text-primary text-xs">
+                      {showAllProviders
+                        ? 'Show connected only'
+                        : `Show all providers (+${disconnectedCount} disconnected)`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
