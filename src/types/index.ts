@@ -103,7 +103,7 @@ export interface ChatQuestion {
 }
 
 export interface ChatPermission {
-  /** The requestID from the server (e.g. "perm_...") — used for approve/deny */
+  /** The requestID from the server (e.g. "per_...") — used for v2 permission replies */
   requestId: string;
   /** Permission kind from the server */
   type: string;
