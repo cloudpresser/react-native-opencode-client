@@ -94,9 +94,10 @@ export interface QuestionAskedEvent {
 
 /** Permission request item */
 export interface PermissionItem {
-  message: string;
-  header?: string;
-  details?: string;
+  type: string;
+  patterns?: string[];
+  metadata?: Record<string, any>;
+  always?: string[];
 }
 
 /** Payload from the server's `permission.asked` SSE event */
@@ -105,6 +106,36 @@ export interface PermissionAskedEvent {
   sessionID: string;
   permission: PermissionItem;
   tool?: { messageID: string; callID: string };
+}
+
+function normalizePermissionEvent(raw: any): PermissionAskedEvent {
+  const permission = raw?.permission;
+
+  if (typeof permission === 'string') {
+    return {
+      id: raw.id,
+      sessionID: raw.sessionID,
+      permission: {
+        type: permission,
+        patterns: raw.patterns,
+        metadata: raw.metadata,
+        always: raw.always,
+      },
+      tool: raw.tool,
+    };
+  }
+
+  return {
+    id: raw.id,
+    sessionID: raw.sessionID,
+    permission: {
+      type: permission?.type || 'unknown',
+      patterns: permission?.patterns ?? raw.patterns,
+      metadata: permission?.metadata ?? raw.metadata,
+      always: permission?.always ?? raw.always,
+    },
+    tool: raw.tool,
+  };
 }
 
 export interface ToolMetadata {
@@ -422,7 +453,7 @@ export class OpenCodeService {
     attachments?: Array<{ type: string; content: string; name: string; mimeType?: string }>,
     callbacks?: {
       onTextDelta?: (delta: string) => void;
-      onPartUpdated?: (part: any) => void;
+      onPartUpdated?: (part: any, delta?: string) => void;
       onQuestionAsked?: (event: QuestionAskedEvent) => void;
       onPermissionAsked?: (event: PermissionAskedEvent) => void;
       onComplete?: () => void;
@@ -494,10 +525,10 @@ export class OpenCodeService {
             const delta = data.properties?.delta;
 
             if (part?.sessionID === sessionId) {
-              if (delta && (part.type === 'text' || part.type === 'reasoning')) {
+              if (delta && part.type === 'text') {
                 callbacks?.onTextDelta?.(delta);
               }
-              callbacks?.onPartUpdated?.(part);
+              callbacks?.onPartUpdated?.(part, delta);
             }
             return;
           }
@@ -521,10 +552,7 @@ export class OpenCodeService {
             const props = data.properties;
             if (props?.sessionID === sessionId) {
               callbacks?.onPermissionAsked?.({
-                id: props.id,
-                sessionID: props.sessionID,
-                permission: props.permission,
-                tool: props.tool,
+                ...normalizePermissionEvent(props),
               });
             }
             return;
@@ -674,7 +702,8 @@ export class OpenCodeService {
         headers: this.getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch pending permissions');
-      return response.json();
+      const data = await response.json();
+      return data.map((item: any) => normalizePermissionEvent(item));
     } catch (error) {
       console.error('Error fetching pending permissions:', error);
       return [];

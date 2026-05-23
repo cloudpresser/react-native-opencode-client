@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,14 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
 import { Agent, ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
-import { OpenCodeService, Message as ApiMessage, ToolMetadata, QuestionAskedEvent, PermissionAskedEvent } from '../../services/opencode';
+import {
+  OpenCodeService,
+  Message as ApiMessage,
+  MessagePart as ApiMessagePart,
+  ToolMetadata,
+  QuestionAskedEvent,
+  PermissionAskedEvent,
+} from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useAppStateRefresh } from '../../hooks/useAppStateRefresh';
 import MarkdownRenderer from './MarkdownRenderer';
@@ -38,9 +45,128 @@ interface ChatTabProps {
 
 type ChatListItem =
   | { kind: 'message'; key: string; message: ChatMessage }
-  | { kind: 'streaming'; key: string; content: string }
+  | { kind: 'streaming'; key: string; message: ChatMessage }
+  | { kind: 'blocked-placeholder'; key: string; promptType: 'question' | 'permission' }
   | { kind: 'question'; key: string; event: QuestionAskedEvent }
   | { kind: 'permission'; key: string; event: PermissionAskedEvent };
+
+function buildPlainContent(parts: ChatMessagePart[]): string {
+  return parts
+    .filter((part) => part.type === 'text')
+    .map((part) => part.content || '')
+    .join('');
+}
+
+function createStreamingMessage(sessionId: string): ChatMessage {
+  return {
+    id: `streaming-${sessionId}`,
+    role: 'assistant',
+    content: '',
+    parts: [],
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function isUserPromptEcho(part: ApiMessagePart & { sessionID?: string }, delta: string | undefined, promptText: string): boolean {
+  return part.type === 'text' && !delta && part.text === promptText;
+}
+
+function formatPermissionMessage(event: PermissionAskedEvent): { message: string; details?: string; patterns?: string[] } {
+  const permissionType = event.permission.type || 'unknown';
+  const filepath = typeof event.permission.metadata?.filepath === 'string'
+    ? event.permission.metadata.filepath
+    : undefined;
+  const parentDir = typeof event.permission.metadata?.parentDir === 'string'
+    ? event.permission.metadata.parentDir
+    : undefined;
+
+  switch (permissionType) {
+    case 'external_directory':
+      return {
+        message: filepath
+          ? `OpenCode wants to access ${filepath}.`
+          : 'OpenCode wants to access a directory outside the workspace.',
+        details: parentDir
+          ? `Parent directory: ${parentDir}`
+          : 'This request requires access outside the current workspace.',
+        patterns: event.permission.patterns,
+      };
+    default:
+      return {
+        message: filepath
+          ? `OpenCode requested ${permissionType.replace(/_/g, ' ')} for ${filepath}.`
+          : `OpenCode requested ${permissionType.replace(/_/g, ' ')}.`,
+        details: parentDir,
+        patterns: event.permission.patterns,
+      };
+  }
+}
+
+function applyStreamUpdate(
+  current: ChatMessage | null,
+  sessionId: string,
+  part: ApiMessagePart & { sessionID?: string },
+  delta?: string,
+): ChatMessage {
+  const next = current
+    ? { ...current, parts: current.parts ? [...current.parts] : [] }
+    : createStreamingMessage(sessionId);
+
+  const parts = next.parts || [];
+
+  if (part.type === 'text' || part.type === 'reasoning') {
+    const content = typeof part.text === 'string' ? part.text : delta || '';
+    if (!content) {
+      return next;
+    }
+
+    const lastPart = parts[parts.length - 1];
+    if (lastPart?.type === part.type) {
+      parts[parts.length - 1] = {
+        type: part.type,
+        content:
+          typeof part.text === 'string'
+            ? part.text
+            : `${lastPart.content || ''}${delta || ''}`,
+      };
+    } else {
+      parts.push({ type: part.type, content });
+    }
+
+    next.parts = parts;
+    next.content = buildPlainContent(parts);
+    return next;
+  }
+
+  if (part.type === 'tool-invocation') {
+    const invocation = part.toolInvocation;
+    const toolCall: ChatMessagePart = {
+      type: 'tool-call',
+      toolCall: {
+        toolCallId: invocation.toolCallId,
+        toolName: invocation.toolName,
+        args: invocation.args,
+        state: invocation.state,
+        result: invocation.state === 'result' ? invocation.result : undefined,
+      },
+    };
+
+    const existingIndex = parts.findIndex(
+      (item) => item.type === 'tool-call' && item.toolCall?.toolCallId === invocation.toolCallId,
+    );
+
+    if (existingIndex >= 0) {
+      parts[existingIndex] = toolCall;
+    } else {
+      parts.push(toolCall);
+    }
+
+    next.parts = parts;
+    next.content = buildPlainContent(parts);
+  }
+
+  return next;
+}
 
 function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
   const chatParts: ChatMessagePart[] = [];
@@ -119,9 +245,11 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [streamingText, setStreamingText] = useState('');
+  const [streamingMessage, setStreamingMessage] = useState<ChatMessage | null>(null);
   const [pendingQuestion, setPendingQuestion] = useState<QuestionAskedEvent | null>(null);
   const [pendingPermission, setPendingPermission] = useState<PermissionAskedEvent | null>(null);
+  const [blockedPlaceholder, setBlockedPlaceholder] = useState<'question' | 'permission' | null>(null);
+  const resolvedPermissionIdsRef = useRef<Set<string>>(new Set());
   const [service] = useState(() => new OpenCodeService(server));
 
   const [selectedAgent, setSelectedAgent] = useState<string>('');
@@ -136,17 +264,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
       return () => setViewedSessionId(null);
     }, [session.id, setViewedSessionId]),
   );
-
-  // ─── Refetch messages when app resumes from background ───
-  useAppStateRefresh(useCallback(async () => {
-    try {
-      const apiMessages = await service.getMessages(session.id);
-      const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
-      setMessages(session.id, chatMessages);
-    } catch (err) {
-      console.error('Error refreshing messages on resume:', err);
-    }
-  }, [session.id, service, setMessages]));
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -174,26 +291,95 @@ export default function ChatTab({ session, server }: ChatTabProps) {
 
   const sessionMessages = messages[session.id] || [];
 
-  const loadInitialMessages = useCallback(async () => {
+  const syncSessionState = useCallback(async (
+    options?: {
+      showLoader?: boolean;
+      fallbackQuestion?: QuestionAskedEvent | null;
+      fallbackPermission?: PermissionAskedEvent | null;
+      clearStreaming?: boolean;
+    },
+  ) => {
+    const {
+      showLoader = false,
+      fallbackQuestion = null,
+      fallbackPermission = null,
+      clearStreaming = false,
+    } = options || {};
+
     try {
-      setInitialLoading(true);
-      const apiMessages = await service.getMessages(session.id);
+      if (showLoader) {
+        setInitialLoading(true);
+      }
+
+      const [apiMessages, questions, permissions] = await Promise.all([
+        service.getMessages(session.id),
+        service.listPendingQuestions(),
+        service.listPendingPermissions(),
+      ]);
       const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
+      const nextQuestion = questions.find((question) => question.sessionID === session.id) ?? fallbackQuestion;
+      const serverPermissionIds = new Set(permissions.map((permission) => permission.id));
+      for (const resolvedId of Array.from(resolvedPermissionIdsRef.current)) {
+        if (!serverPermissionIds.has(resolvedId)) {
+          resolvedPermissionIdsRef.current.delete(resolvedId);
+        }
+      }
+      const nextPermission = permissions.find(
+        (permission) => permission.sessionID === session.id && !resolvedPermissionIdsRef.current.has(permission.id),
+      ) ?? (fallbackPermission && !resolvedPermissionIdsRef.current.has(fallbackPermission.id) ? fallbackPermission : null);
+
       setMessages(session.id, chatMessages);
+      setPendingQuestion(nextQuestion ?? null);
+      setPendingPermission(nextPermission ?? null);
+      setBlockedPlaceholder(null);
+
+      if (clearStreaming) {
+        setStreamingMessage(null);
+      }
     } catch (error) {
-      console.error('Error loading initial messages:', error);
-      Alert.alert('Error', 'Failed to load messages from server');
+      console.error('Error syncing session state:', error);
+
+      if (fallbackQuestion) {
+        setPendingQuestion(fallbackQuestion);
+        setPendingPermission(null);
+        setBlockedPlaceholder(null);
+      }
+
+      if (fallbackPermission) {
+        setPendingPermission(fallbackPermission);
+        setPendingQuestion(null);
+        setBlockedPlaceholder(null);
+      }
+
+      if (showLoader) {
+        Alert.alert('Error', 'Failed to load messages from server');
+      }
     } finally {
-      setInitialLoading(false);
+      if (showLoader) {
+        setInitialLoading(false);
+      }
     }
   }, [session.id, service, setMessages]);
 
+  // ─── Refetch messages and pending prompts when app resumes ───
+  useAppStateRefresh(useCallback(async () => {
+    await syncSessionState();
+  }, [syncSessionState]));
+
   useEffect(() => {
-    loadInitialMessages();
-  }, [loadInitialMessages]);
+    syncSessionState({ showLoader: true, clearStreaming: true });
+  }, [syncSessionState]);
 
   const listItems = useMemo<ChatListItem[]>(() => {
     const items: ChatListItem[] = [];
+
+    if (blockedPlaceholder && !pendingQuestion && !pendingPermission) {
+      items.push({
+        kind: 'blocked-placeholder',
+        key: `blocked-placeholder-${blockedPlaceholder}-${session.id}`,
+        promptType: blockedPlaceholder,
+      });
+    }
 
     if (pendingPermission) {
       items.push({
@@ -211,11 +397,11 @@ export default function ChatTab({ session, server }: ChatTabProps) {
       });
     }
 
-    if (streamingText) {
+    if (streamingMessage) {
       items.push({
         kind: 'streaming',
         key: `streaming-${session.id}`,
-        content: streamingText,
+        message: streamingMessage,
       });
     }
 
@@ -226,7 +412,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         .reverse()
         .map((message) => ({ kind: 'message', key: message.id, message }) satisfies ChatListItem),
     ];
-  }, [pendingPermission, pendingQuestion, session.id, sessionMessages, streamingText]);
+  }, [blockedPlaceholder, pendingPermission, pendingQuestion, session.id, sessionMessages, streamingMessage]);
 
   const handlePickFile = async () => {
     try {
@@ -302,13 +488,14 @@ export default function ChatTab({ session, server }: ChatTabProps) {
       // The stream will naturally end or error out, so we rely on that to clear loading state
       // But we can force it here for immediate UI feedback
       setLoading(false);
+      setBlockedPlaceholder(null);
     } catch (error) {
       console.error('Error aborting session:', error);
       Alert.alert('Error', 'Failed to stop generation');
     }
   };
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (!input.trim() && attachments.length === 0) return;
 
     const messageText = input;
@@ -325,7 +512,10 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     const currentAttachments = [...attachments];
     setAttachments([]);
     setLoading(true);
-    setStreamingText('');
+    setStreamingMessage(null);
+    setPendingQuestion(null);
+    setPendingPermission(null);
+    setBlockedPlaceholder(null);
 
     try {
       const preparedAttachments = await Promise.all(
@@ -351,30 +541,35 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         })
       );
 
-      let streamedText = '';
-
       await service.streamMessage(
         session.id,
         messageText,
         preparedAttachments.length > 0 ? preparedAttachments : undefined,
         {
-          onTextDelta: (delta) => {
-            streamedText += delta;
-            setStreamingText(streamedText);
+          onPartUpdated: (part, delta) => {
+            if (!streamingMessage && isUserPromptEcho(part, delta, messageText)) {
+              return;
+            }
+            setStreamingMessage((current) => applyStreamUpdate(current, session.id, part, delta));
+            setBlockedPlaceholder(null);
           },
-          onQuestionAsked: (event) => {
-            setPendingQuestion(event);
+          onQuestionAsked: async (event) => {
+            setBlockedPlaceholder('question');
+            setPendingQuestion(null);
+            setPendingPermission(null);
+            await syncSessionState({ fallbackQuestion: event });
           },
-          onPermissionAsked: (event) => {
-            setPendingPermission(event);
+          onPermissionAsked: async (event) => {
+            setBlockedPlaceholder('permission');
+            setPendingPermission(null);
+            setPendingQuestion(null);
+            await syncSessionState({ fallbackPermission: event });
           },
           onComplete: async () => {
             // Fetch final messages from server to get rich parts
             // (tool calls, reasoning blocks, attachments, etc.)
             try {
-              const apiMessages = await service.getMessages(session.id);
-              const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
-              setMessages(session.id, chatMessages);
+              await syncSessionState({ clearStreaming: true });
             } catch (err) {
               console.error('Error fetching final messages:', err);
             }
@@ -383,21 +578,17 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         selectedAgent
       );
 
-      setStreamingText('');
     } catch (error) {
       console.error('Error sending message:', error);
       // On SSE failure, try to reload messages from server
       try {
-        const apiMessages = await service.getMessages(session.id);
-        const chatMessages = apiMessages.map(convertApiMessageToChatMessage);
-        setMessages(session.id, chatMessages);
+        await syncSessionState({ clearStreaming: true });
       } catch (_) {}
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setLoading(false);
-      setStreamingText('');
     }
-  };
+  }, [addMessage, attachments, input, selectedAgent, service, session.id, syncSessionState]);
 
   /**
    * Reply to a pending question from the server.
@@ -406,13 +597,14 @@ export default function ChatTab({ session, server }: ChatTabProps) {
    * continue receiving events once the server unblocks.
    */
   const handleAnswerQuestion = async (requestId: string, answers: string[][]) => {
-    setPendingQuestion(null);
-
     try {
       const ok = await service.replyToQuestion(requestId, answers);
       if (!ok) {
         Alert.alert('Error', 'Failed to send answer to server');
+        return;
       }
+      setPendingQuestion(null);
+      setBlockedPlaceholder(null);
       // The original SSE stream is still open.
       // When the LLM resumes, we'll get more message.part.updated events,
       // and eventually session.status: idle → onComplete fires.
@@ -426,13 +618,15 @@ export default function ChatTab({ session, server }: ChatTabProps) {
    * Approve a pending permission request from the server.
    */
   const handleApprovePermission = async (requestId: string) => {
-    setPendingPermission(null);
-
     try {
       const ok = await service.approvePermission(requestId);
       if (!ok) {
         Alert.alert('Error', 'Failed to approve permission');
+        return;
       }
+      resolvedPermissionIdsRef.current.add(requestId);
+      setPendingPermission(null);
+      setBlockedPlaceholder(null);
     } catch (error) {
       console.error('Error approving permission:', error);
       Alert.alert('Error', 'Failed to approve permission');
@@ -443,13 +637,15 @@ export default function ChatTab({ session, server }: ChatTabProps) {
    * Deny a pending permission request from the server.
    */
   const handleDenyPermission = async (requestId: string) => {
-    setPendingPermission(null);
-
     try {
       const ok = await service.denyPermission(requestId);
       if (!ok) {
         Alert.alert('Error', 'Failed to deny permission');
+        return;
       }
+      resolvedPermissionIdsRef.current.add(requestId);
+      setPendingPermission(null);
+      setBlockedPlaceholder(null);
     } catch (error) {
       console.error('Error denying permission:', error);
       Alert.alert('Error', 'Failed to deny permission');
@@ -489,6 +685,9 @@ export default function ChatTab({ session, server }: ChatTabProps) {
               return null;
 
             case 'reasoning':
+              if (!part.content?.trim()) {
+                return null;
+              }
               return (
                 <View key={idx} className="border-l-2 border-info pl-2 mb-2 opacity-70">
                   <Text className="text-text-muted text-[10px] font-semibold mb-0.5">Thinking</Text>
@@ -577,31 +776,41 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         return renderMessage(item.message);
       case 'streaming':
         return (
-          <View className="self-start w-full py-2 mb-3" testID="streaming-message">
+          <View testID="streaming-message">
+            {renderMessage(item.message)}
+            {!pendingQuestion && !pendingPermission && !blockedPlaceholder ? (
+              <StyledActivityIndicator className="mt-2 mb-3 self-start" />
+            ) : null}
+          </View>
+        );
+      case 'blocked-placeholder':
+        return (
+          <View className="self-start w-full py-2 mb-3" testID={`blocked-${item.promptType}`}>
             <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
-            <MarkdownRenderer content={item.content} />
-            {!pendingQuestion && !pendingPermission && <StyledActivityIndicator className="mt-2" />}
+            <View className="bg-surface-elevated border border-border rounded-lg px-3 py-3 self-start">
+              <Text className="text-text font-medium">
+                {item.promptType === 'question' ? 'Asking question...' : 'Requesting permission...'}
+              </Text>
+            </View>
+            <StyledActivityIndicator className="mt-2 self-start" />
           </View>
         );
       case 'question':
         return (
           <View className="mb-3">
-            {item.event.questions.map((question, idx) => (
-              <QuestionDisplay
-                key={`${item.event.id}-${idx}`}
-                question={{
-                  requestId: item.event.id,
-                  question: question.question,
-                  header: question.header,
-                  options: question.options,
-                  multiple: question.multiple,
-                  custom: question.custom,
-                }}
-                onAnswer={(selectedLabels: string[]) => {
-                  handleAnswerQuestion(item.event.id, [selectedLabels]);
-                }}
-              />
-            ))}
+            <QuestionDisplay
+              questions={item.event.questions.map((question) => ({
+                requestId: item.event.id,
+                question: question.question,
+                header: question.header,
+                options: question.options,
+                multiple: question.multiple,
+                custom: question.custom,
+              }))}
+              onAnswer={(answers: string[][]) => {
+                handleAnswerQuestion(item.event.id, answers);
+              }}
+            />
           </View>
         );
       case 'permission':
@@ -610,9 +819,8 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             <PermissionDisplay
               permission={{
                 requestId: item.event.id,
-                message: item.event.permission.message,
-                header: item.event.permission.header,
-                details: item.event.permission.details,
+                type: item.event.permission.type,
+                ...formatPermissionMessage(item.event),
               }}
               onApprove={() => handleApprovePermission(item.event.id)}
               onDeny={() => handleDenyPermission(item.event.id)}

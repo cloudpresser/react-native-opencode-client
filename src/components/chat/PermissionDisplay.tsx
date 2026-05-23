@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { ChatPermission } from '../../types';
-import { useThemeColors } from '../../hooks/useThemeColors';
 
 interface PermissionDisplayProps {
   permission: ChatPermission;
@@ -18,7 +17,6 @@ export default function PermissionDisplay({
   onDeny, 
   answered = false 
 }: PermissionDisplayProps) {
-  const colors = useThemeColors();
   const [submitted, setSubmitted] = useState(false);
 
   const isDisabled = answered || submitted;
@@ -37,10 +35,9 @@ export default function PermissionDisplay({
 
   return (
     <View className="bg-surface-elevated p-4 rounded-lg border border-border mt-2">
-      {/* Header */}
-      {permission.header ? (
+      {permission.type ? (
         <Text className="text-text-muted text-xs font-semibold uppercase tracking-wide mb-1">
-          {permission.header}
+          {permission.type.replace(/_/g, ' ')}
         </Text>
       ) : null}
 
@@ -50,6 +47,12 @@ export default function PermissionDisplay({
       {/* Details (if provided) */}
       {permission.details ? (
         <Text className="text-text-subtle text-sm mb-3">{permission.details}</Text>
+      ) : null}
+
+      {permission.patterns && permission.patterns.length > 0 ? (
+        <Text className="text-text-subtle text-xs mb-3">
+          Allowed patterns: {permission.patterns.join(', ')}
+        </Text>
       ) : null}
 
       {/* Action buttons */}

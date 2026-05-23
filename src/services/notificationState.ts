@@ -11,6 +11,8 @@ export interface PollState {
   busySessionIds: string[];
   /** Pending question request IDs at the time of this poll */
   pendingQuestionIds: string[];
+  /** Pending permission request IDs at the time of this poll */
+  pendingPermissionIds: string[];
   /** Unix timestamp (ms) of when this poll ran */
   timestamp: number;
 }
