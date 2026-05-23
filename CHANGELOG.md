@@ -1,3 +1,13 @@
+## [2.14.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.14.1...v2.14.2) (2026-05-23)
+
+
+### Bug Fixes
+
+* adopt v2 permission reply flow ([a1a759a](https://github.com/cloudpresser/react-native-opencode-client/commit/a1a759a6bc71dd1e4f168a339270f8fd6dff0cbc))
+* align chat events with opencode payloads ([e54f73b](https://github.com/cloudpresser/react-native-opencode-client/commit/e54f73bb9861aee9bd0c524944a3d39a74f3f11d))
+* make chat stream updates durable ([d455446](https://github.com/cloudpresser/react-native-opencode-client/commit/d45544641c95dea68560c1df79b05d173e09b25d))
+* use inverted chat list for session messages ([b5000c9](https://github.com/cloudpresser/react-native-opencode-client/commit/b5000c90ca2f385780acf7efa7059f924fe4cc6d))
+
 ## [2.14.1](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.14.0...v2.14.1) (2026-03-02)
 
 
