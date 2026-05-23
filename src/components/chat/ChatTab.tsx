@@ -156,6 +156,47 @@ function applyStreamUpdate(
 
   const { part, delta } = event;
 
+  const buildToolCallPart = (toolPart: Extract<ApiMessagePart, { type: 'tool' | 'tool-invocation' }>): ChatMessagePart => {
+    if (toolPart.type === 'tool-invocation') {
+      const invocation = toolPart.toolInvocation;
+      return {
+        id: toolPart.id,
+        type: 'tool-call',
+        toolCall: {
+          toolCallId: invocation.toolCallId,
+          toolName: invocation.toolName,
+          args: invocation.args,
+          state: invocation.state,
+          result: invocation.state === 'result' ? invocation.result : undefined,
+        },
+      };
+    }
+
+    const state = toolPart.state;
+    return {
+      id: toolPart.id,
+      type: 'tool-call',
+      toolCall: {
+        toolCallId: toolPart.callID,
+        toolName: toolPart.tool,
+        args: state.input,
+        state:
+          state.status === 'completed' || state.status === 'error'
+            ? 'result'
+            : state.status === 'running'
+              ? 'call'
+              : 'partial-call',
+        result:
+          state.status === 'completed'
+            ? state.output
+            : state.status === 'error'
+              ? state.error
+              : undefined,
+        title: state.status === 'running' || state.status === 'completed' ? state.title : undefined,
+      },
+    };
+  };
+
   if (part.type === 'reasoning') {
     const reasoningContent = typeof part.text === 'string' ? part.text : delta || '';
     const previous = parts.find((item) => item.id === part.id);
@@ -202,22 +243,12 @@ function applyStreamUpdate(
     return next;
   }
 
-  if (part.type === 'tool-invocation') {
-    const invocation = part.toolInvocation;
-    const toolCall: ChatMessagePart = {
-      id: part.id,
-      type: 'tool-call',
-      toolCall: {
-        toolCallId: invocation.toolCallId,
-        toolName: invocation.toolName,
-        args: invocation.args,
-        state: invocation.state,
-        result: invocation.state === 'result' ? invocation.result : undefined,
-      },
-    };
+  if (part.type === 'tool-invocation' || part.type === 'tool') {
+    const toolCall = buildToolCallPart(part);
+    const toolCallId = toolCall.toolCall?.toolCallId;
 
     const existingIndex = parts.findIndex(
-      (item) => item.id === part.id || (item.type === 'tool-call' && item.toolCall?.toolCallId === invocation.toolCallId),
+      (item) => item.id === part.id || (item.type === 'tool-call' && item.toolCall?.toolCallId === toolCallId),
     );
 
     if (existingIndex >= 0) {
@@ -240,6 +271,49 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
 
   const toolMeta = apiMsg.metadata?.tool ?? {};
 
+  const buildPersistedToolCall = (part: Extract<ApiMessagePart, { type: 'tool' | 'tool-invocation' }>): ChatMessagePart => {
+    if (part.type === 'tool-invocation') {
+      const inv = part.toolInvocation;
+      const meta: ToolMetadata | undefined = toolMeta[inv.toolCallId];
+      return {
+        id: part.id,
+        type: 'tool-call',
+        toolCall: {
+          toolCallId: inv.toolCallId,
+          toolName: inv.toolName,
+          args: inv.args,
+          state: inv.state,
+          result: inv.state === 'result' ? inv.result : undefined,
+          title: meta?.title,
+        },
+      };
+    }
+
+    const state = part.state;
+    return {
+      id: part.id,
+      type: 'tool-call',
+      toolCall: {
+        toolCallId: part.callID,
+        toolName: part.tool,
+        args: state.input,
+        state:
+          state.status === 'completed' || state.status === 'error'
+            ? 'result'
+            : state.status === 'running'
+              ? 'call'
+              : 'partial-call',
+        result:
+          state.status === 'completed'
+            ? state.output
+            : state.status === 'error'
+              ? state.error
+              : undefined,
+        title: state.status === 'running' || state.status === 'completed' ? state.title : undefined,
+      },
+    };
+  };
+
   for (const part of apiMsg.parts) {
     switch (part.type) {
       case 'text':
@@ -249,21 +323,9 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
       case 'reasoning':
         chatParts.push({ id: part.id, type: 'reasoning', content: part.text });
         break;
-      case 'tool-invocation': {
-        const inv = part.toolInvocation;
-        const meta: ToolMetadata | undefined = toolMeta[inv.toolCallId];
-        chatParts.push({
-          id: part.id,
-          type: 'tool-call',
-          toolCall: {
-            toolCallId: inv.toolCallId,
-            toolName: inv.toolName,
-            args: inv.args,
-            state: inv.state,
-            result: inv.state === 'result' ? inv.result : undefined,
-            title: meta?.title,
-          },
-        });
+      case 'tool-invocation':
+      case 'tool': {
+        chatParts.push(buildPersistedToolCall(part));
         break;
       }
       case 'image':

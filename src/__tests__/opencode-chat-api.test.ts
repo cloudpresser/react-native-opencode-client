@@ -477,6 +477,15 @@ async function run() {
       }
       const permissionProps = permissionEvent.properties || {};
       logJson('permission.asked payload', summarizeRelevantEvent(permissionEvent));
+      const toolPartEvent = events.find(
+        (event) =>
+          event.type === 'message.part.updated' &&
+          (event.properties?.part?.type === 'tool' || event.properties?.part?.type === 'tool-invocation'),
+      );
+      if (!toolPartEvent) {
+        throw new Error('Expected a tool-related message part before permission reply');
+      }
+      logJson('sample tool part event', summarizeRelevantEvent(toolPartEvent));
       assert(!!pendingPermissionSnapshot, 'Expected pending permission snapshot before reply');
       logJson('GET /permission item', pendingPermissionSnapshot);
 

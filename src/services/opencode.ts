@@ -42,6 +42,47 @@ export interface ToolInvocationPart extends PartEnvelope {
   toolInvocation: ToolInvocation;
 }
 
+export interface ToolStatePending {
+  status: 'pending';
+  input: Record<string, any>;
+  raw?: string;
+}
+
+export interface ToolStateRunning {
+  status: 'running';
+  input: Record<string, any>;
+  title?: string;
+  metadata?: Record<string, any>;
+  time?: { start: number };
+}
+
+export interface ToolStateCompleted {
+  status: 'completed';
+  input: Record<string, any>;
+  output: string;
+  title: string;
+  metadata?: Record<string, any>;
+  time?: { start: number; end: number; compacted?: number };
+  attachments?: FilePart[];
+}
+
+export interface ToolStateError {
+  status: 'error';
+  input: Record<string, any>;
+  error: string;
+  metadata?: Record<string, any>;
+}
+
+export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError;
+
+export interface ToolPart extends PartEnvelope {
+  type: 'tool';
+  callID: string;
+  tool: string;
+  state: ToolState;
+  metadata?: Record<string, any>;
+}
+
 export interface SourceUrlPart {
   type: 'source-url';
   sourceId: string;
@@ -71,6 +112,7 @@ export type MessagePart =
   | TextPart
   | ReasoningPart
   | ToolInvocationPart
+  | ToolPart
   | SourceUrlPart
   | StepStartPart
   | FilePart
