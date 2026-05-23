@@ -1,7 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, Platform, ScrollView } from 'react-native';
-import CodeHighlighter from 'react-native-code-highlighter';
-import { atomOneDarkReasonable } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { ChatMessageToolCall } from '../../types';
 import { useThemeColors } from '../../hooks/useThemeColors';
 
@@ -13,6 +11,7 @@ const TOOL_ICONS: Record<string, string> = {
   read: 'R',
   write: 'W',
   edit: 'E',
+  apply_patch: 'P',
   bash: '$',
   glob: 'G',
   grep: '?',
@@ -54,20 +53,147 @@ function getStatusLabel(state: string): string {
   }
 }
 
-function formatArgs(args: Record<string, any>): string {
-  try {
-    return JSON.stringify(args, null, 2);
-  } catch {
-    return String(args);
-  }
-}
-
 function formatResult(result: string): string {
-  // Truncate very long results for display
-  if (result.length > 2000) {
-    return result.slice(0, 2000) + '\n... (truncated)';
+  if (result.length > 4000) {
+    return result.slice(0, 4000) + '\n... (truncated)';
   }
   return result;
+}
+
+function renderDiffLine(line: string, index: number, colors: ReturnType<typeof useThemeColors>) {
+  let backgroundColor = 'transparent';
+  let color: string = colors.codeText;
+  let fontWeight: '400' | '700' = '400';
+
+  if (line.startsWith('+')) {
+    backgroundColor = `${colors.success}22`;
+    color = colors.success;
+  } else if (line.startsWith('-')) {
+    backgroundColor = `${colors.danger}22`;
+    color = colors.danger;
+  } else if (line.startsWith('@@')) {
+    backgroundColor = `${colors.info}22`;
+    color = colors.info;
+    fontWeight = '700';
+  } else if (line.startsWith('diff') || line.startsWith('index') || line.startsWith('---') || line.startsWith('+++')) {
+    color = colors.textSubtle;
+  }
+
+  return (
+    <Text
+      key={`${index}-${line}`}
+      selectable
+      style={{
+        backgroundColor,
+        color,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontSize: 11,
+        lineHeight: 16,
+        fontWeight,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+      }}
+    >
+      {line}
+    </Text>
+  );
+}
+
+function getDiffText(toolCall: ChatMessageToolCall): string | null {
+  const metadata = toolCall.metadata;
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const files = Array.isArray(metadata.files) ? metadata.files : null;
+  if (files && files.length > 0) {
+    const patches = files
+      .map((file) => (typeof file?.patch === 'string' ? file.patch : ''))
+      .filter(Boolean);
+    if (patches.length > 0) {
+      return patches.join('\n');
+    }
+  }
+
+  const filediff = metadata.filediff;
+  if (filediff && typeof filediff === 'object' && typeof filediff.patch === 'string' && filediff.patch.trim()) {
+    return filediff.patch;
+  }
+
+  if (typeof metadata.diff === 'string' && metadata.diff.trim()) {
+    return metadata.diff;
+  }
+
+  return null;
+}
+
+function looksLikeUnifiedDiff(value: string): boolean {
+  return value.includes('@@') || value.includes('diff --git') || (value.includes('---') && value.includes('+++'));
+}
+
+function isEditLikeTool(toolName: string): boolean {
+  const lower = toolName.toLowerCase();
+  return lower.includes('edit') || lower.includes('write') || lower.includes('patch');
+}
+
+function CodeBlock({ children, colors }: { children: React.ReactNode; colors: ReturnType<typeof useThemeColors> }) {
+  return (
+    <View
+      style={{
+        width: '100%',
+        alignSelf: 'stretch',
+        backgroundColor: colors.codeBackground,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: colors.borderMuted,
+        overflow: 'hidden',
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function TodoList({ todos, colors }: { todos: Array<{ content: string; status: string; priority: string }>; colors: ReturnType<typeof useThemeColors> }) {
+  return (
+    <View style={{ gap: 6 }}>
+      {todos.map((todo, index) => {
+        const statusColor =
+          todo.status === 'completed'
+            ? colors.success
+            : todo.status === 'in_progress'
+              ? colors.primary
+              : todo.status === 'cancelled'
+                ? colors.textSubtle
+                : colors.warning;
+
+        return (
+          <View
+            key={`${todo.content}-${index}`}
+            style={{
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.borderMuted,
+              borderRadius: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              gap: 4,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 }}>{todo.content}</Text>
+              <Text style={{ color: statusColor, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>
+                {todo.status.replace('_', ' ')}
+              </Text>
+            </View>
+            <Text style={{ color: colors.textSubtle, fontSize: 10, textTransform: 'uppercase' }}>
+              Priority: {todo.priority}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
 }
 
 export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
@@ -78,7 +204,15 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
   const icon = getToolIcon(toolCall.toolName);
   const displayTitle = toolCall.title || toolCall.toolName;
 
-  // Build a summary from args for common tools
+  const diffText = useMemo(() => getDiffText(toolCall), [toolCall]);
+  const resultText = toolCall.result ? formatResult(toolCall.result) : null;
+  const showDiff = !!diffText && isEditLikeTool(toolCall.toolName) && looksLikeUnifiedDiff(diffText);
+  const todoItems = useMemo(() => {
+    const todos = toolCall.metadata?.todos;
+    return Array.isArray(todos) ? todos : null;
+  }, [toolCall.metadata]);
+  const showResultSection = !todoItems?.length && (showDiff || resultText);
+
   let argsSummary = '';
   if (toolCall.args) {
     if (toolCall.args.filePath) argsSummary = toolCall.args.filePath;
@@ -99,7 +233,6 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
         overflow: 'hidden',
       }}
     >
-      {/* Header - always visible */}
       <TouchableOpacity
         onPress={() => setExpanded(!expanded)}
         activeOpacity={0.7}
@@ -110,7 +243,6 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
           paddingVertical: 8,
         }}
       >
-        {/* Tool icon */}
         <View
           style={{
             width: 24,
@@ -134,7 +266,6 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
           </Text>
         </View>
 
-        {/* Title + summary */}
         <View style={{ flex: 1 }}>
           <Text
             numberOfLines={1}
@@ -161,7 +292,6 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
           ) : null}
         </View>
 
-        {/* Status badge */}
         <View
           style={{
             backgroundColor: statusColor + '22',
@@ -176,7 +306,6 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
           </Text>
         </View>
 
-        {/* Expand chevron */}
         <Text
           style={{
             color: colors.textMuted,
@@ -188,12 +317,10 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
         </Text>
       </TouchableOpacity>
 
-      {/* Expanded details */}
       {expanded && (
-        <View style={{ paddingHorizontal: 10, paddingBottom: 10 }}>
-          {/* Args */}
-          {toolCall.args && Object.keys(toolCall.args).length > 0 && (
-            <View style={{ marginBottom: 6 }}>
+        <View style={{ paddingHorizontal: 10, paddingBottom: 10, gap: 10 }}>
+          {todoItems && todoItems.length > 0 && (
+            <View style={{ width: '100%', alignSelf: 'stretch' }}>
               <Text
                 style={{
                   color: colors.textMuted,
@@ -204,30 +331,14 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
                   marginBottom: 4,
                 }}
               >
-                Arguments
+                Todos
               </Text>
-              <CodeHighlighter
-                hljsStyle={atomOneDarkReasonable}
-                language="json"
-                containerStyle={{
-                  borderRadius: 6,
-                  padding: 8,
-                  maxHeight: 200,
-                }}
-                textStyle={{
-                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                  fontSize: 11,
-                  lineHeight: 16,
-                }}
-              >
-                {formatArgs(toolCall.args)}
-              </CodeHighlighter>
+              <TodoList todos={todoItems} colors={colors} />
             </View>
           )}
 
-          {/* Result */}
-          {toolCall.result && (
-            <View>
+          {showResultSection && (
+            <View style={{ width: '100%', alignSelf: 'stretch' }}>
               <Text
                 style={{
                   color: colors.textMuted,
@@ -238,28 +349,32 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
                   marginBottom: 4,
                 }}
               >
-                Result
+                {showDiff ? 'Diff' : 'Result'}
               </Text>
-              <ScrollView
-                style={{
-                  maxHeight: 300,
-                    backgroundColor: colors.codeBackground,
-                  borderRadius: 6,
-                  padding: 8,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.codeText,
-                    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                    fontSize: 11,
-                    lineHeight: 16,
-                  }}
-                  selectable
-                >
-                  {formatResult(toolCall.result)}
-                </Text>
-              </ScrollView>
+              <CodeBlock colors={colors}>
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 300 }}>
+                  <ScrollView horizontal nestedScrollEnabled contentContainerStyle={{ minWidth: '100%' }}>
+                    <View style={{ minWidth: '100%' }}>
+                      {showDiff && diffText
+                        ? diffText.split('\n').map((line, index) => renderDiffLine(line, index, colors))
+                        : (
+                          <Text
+                            selectable
+                            style={{
+                              color: colors.codeText,
+                              fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                              fontSize: 11,
+                              lineHeight: 16,
+                              padding: 8,
+                            }}
+                          >
+                            {resultText}
+                          </Text>
+                        )}
+                    </View>
+                  </ScrollView>
+                </ScrollView>
+              </CodeBlock>
             </View>
           )}
         </View>

@@ -168,6 +168,7 @@ function applyStreamUpdate(
           args: invocation.args,
           state: invocation.state,
           result: invocation.state === 'result' ? invocation.result : undefined,
+          metadata: undefined,
         },
       };
     }
@@ -193,6 +194,7 @@ function applyStreamUpdate(
               ? state.error
               : undefined,
         title: state.status === 'running' || state.status === 'completed' ? state.title : undefined,
+        metadata: ('metadata' in state ? state.metadata : undefined) ?? toolPart.metadata,
       },
     };
   };
@@ -285,6 +287,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
           state: inv.state,
           result: inv.state === 'result' ? inv.result : undefined,
           title: meta?.title,
+          metadata: undefined,
         },
       };
     }
@@ -310,6 +313,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
               ? state.error
               : undefined,
         title: state.status === 'running' || state.status === 'completed' ? state.title : undefined,
+        metadata: ('metadata' in state ? state.metadata : undefined) ?? part.metadata,
       },
     };
   };

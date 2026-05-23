@@ -80,6 +80,7 @@ export interface ChatMessageToolCall {
   state: 'call' | 'partial-call' | 'result';
   result?: string;
   title?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface ChatQuestionOption {

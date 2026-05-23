@@ -206,6 +206,13 @@ async function getMessages(sessionId: string) {
   return response.json();
 }
 
+function getAssistantToolParts(messages: any[]) {
+  return messages
+    .filter((message) => message.info?.role === 'assistant')
+    .flatMap((message) => message.parts || [])
+    .filter((part) => part.type === 'tool' || part.type === 'tool-invocation');
+}
+
 async function listPendingQuestions() {
   const response = await requestJson(`${BASE_URL}/question`);
   assert(response.ok, `Failed to fetch pending questions: ${response.status}`);
@@ -413,6 +420,95 @@ async function run() {
           textPreview: typeof part.text === 'string' ? part.text.slice(0, 200) : '',
         })),
       );
+    });
+
+    await testWithRetries('captures diff metadata for edit-style tools', 3, async (attempt) => {
+      const targetFile = path.join(tempDir, `edit-target-${attempt}.txt`);
+      await writeFile(targetFile, 'alpha\nbeta\ndelta\n', 'utf8');
+
+      const session = await createSession(`chat-api-edit-attempt-${attempt}`, { model: TEST_MODEL });
+      await waitForStream({
+        sessionId: session.id,
+        prompt: `Use the edit tool or apply_patch tool to change the line \"beta\" to \"gamma\" in ${path.basename(targetFile)}. Do not use the write tool. Stop after the edit succeeds.`,
+        stopWhen: (event) => event.type === 'session.status' && event.properties?.status?.type === 'idle',
+      });
+
+      const messages = await getMessages(session.id);
+      const toolParts = getAssistantToolParts(messages);
+      const editToolPart = toolParts.find((part: any) => {
+        if (part.type === 'tool') {
+          return (part.tool === 'edit' || part.tool === 'apply_patch') && part.state?.status === 'completed';
+        }
+        return (
+          (part.toolInvocation?.toolName === 'edit' || part.toolInvocation?.toolName === 'apply_patch') &&
+          part.toolInvocation?.state === 'result'
+        );
+      });
+
+      assert(!!editToolPart, 'Expected a completed edit/apply_patch tool part');
+      logJson('edit/apply_patch tool part', editToolPart);
+
+      if (editToolPart.type === 'tool') {
+        const metadata = editToolPart.state?.metadata || {};
+        const hasPatch =
+          (typeof metadata.diff === 'string' && metadata.diff.trim().length > 0) ||
+          (metadata.filediff && typeof metadata.filediff.patch === 'string' && metadata.filediff.patch.trim().length > 0) ||
+          (Array.isArray(metadata.files) && metadata.files.some((file: any) => typeof file.patch === 'string' && file.patch.trim().length > 0));
+        assert(hasPatch, 'Expected completed edit/apply_patch tool metadata to include diff data');
+      }
+    });
+
+    await testWithRetries('observes write tool result shape or logs fallback behavior', 3, async (attempt) => {
+      const fileName = `write-target-${attempt}.txt`;
+      const targetFile = path.join(tempDir, fileName);
+      const session = await createSession(`chat-api-write-attempt-${attempt}`, { model: TEST_MODEL });
+      await waitForStream({
+        sessionId: session.id,
+        prompt: `Use the write tool to create ${fileName} with exactly the content \"hello from the write tool\". This request is specifically intended to inspect the write tool result shape, so prefer write over edit or apply_patch. Stop after the file is created.`,
+        stopWhen: (event) => event.type === 'session.status' && event.properties?.status?.type === 'idle',
+      });
+
+      const messages = await getMessages(session.id);
+      const toolParts = getAssistantToolParts(messages);
+      const writeToolPart = toolParts.find((part: any) => {
+        if (part.type === 'tool') {
+          return part.tool === 'write' && part.state?.status === 'completed';
+        }
+        return part.toolInvocation?.toolName === 'write' && part.toolInvocation?.state === 'result';
+      });
+
+      if (writeToolPart) {
+        logJson('write tool part', writeToolPart);
+        if (writeToolPart.type === 'tool') {
+          assert(typeof writeToolPart.state?.output === 'string', 'Expected write tool completed state to include output text');
+        }
+        return;
+      }
+
+      const fallbackToolPart = toolParts.find((part: any) => {
+        if (part.type === 'tool') {
+          return (part.tool === 'apply_patch' || part.tool === 'edit') && part.state?.status === 'completed';
+        }
+        return (
+          (part.toolInvocation?.toolName === 'apply_patch' || part.toolInvocation?.toolName === 'edit') &&
+          part.toolInvocation?.state === 'result'
+        );
+      });
+
+      if (fallbackToolPart) {
+        logJson('write fallback tool part', fallbackToolPart);
+        return;
+      }
+
+      const fileExists = await import('node:fs/promises').then((fs) => fs.access(targetFile).then(() => true).catch(() => false));
+      logJson('write tool diagnostic', {
+        observedToolParts: toolParts.map((part: any) => ({
+          type: part.type,
+          tool: part.type === 'tool' ? part.tool : part.toolInvocation?.toolName,
+          state: part.type === 'tool' ? part.state?.status : part.toolInvocation?.state,
+        })),
+        fileExists,
+      });
     });
 
     await testWithRetries('captures a structured question payload and clears it after reply', 3, async (attempt) => {
