@@ -105,12 +105,14 @@ export interface ChatQuestion {
 export interface ChatPermission {
   /** The requestID from the server (e.g. "perm_...") — used for approve/deny */
   requestId: string;
-  /** The permission request description */
+  /** Permission kind from the server */
+  type: string;
+  /** Human-readable summary for display */
   message: string;
-  /** Short header label */
-  header?: string;
-  /** Optional detailed explanation */
+  /** Optional secondary detail */
   details?: string;
+  /** Optional path patterns involved in the request */
+  patterns?: string[];
 }
 
 export interface ChatMessagePart {
@@ -168,5 +170,4 @@ export interface TerminalState {
   currentInput: string;
   isProcessing: boolean;
 }
-
 

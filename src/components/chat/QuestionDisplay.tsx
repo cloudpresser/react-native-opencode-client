@@ -1,151 +1,146 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput } from 'react-native';
 import { ChatQuestion } from '../../types';
 import { useThemeColors } from '../../hooks/useThemeColors';
 
 interface QuestionDisplayProps {
-  question: ChatQuestion;
-  /** Called with an array of selected option labels (or custom text entries) */
-  onAnswer: (selectedLabels: string[]) => void;
+  questions: ChatQuestion[];
+  onAnswer: (answers: string[][]) => void;
   answered?: boolean;
 }
 
-export default function QuestionDisplay({ question, onAnswer, answered = false }: QuestionDisplayProps) {
+export default function QuestionDisplay({ questions, onAnswer, answered = false }: QuestionDisplayProps) {
   const colors = useThemeColors();
-  const [selectedOptions, setSelectedOptions] = useState<Set<string>>(new Set());
-  const [customText, setCustomText] = useState('');
+  const [selectedOptions, setSelectedOptions] = useState<string[][]>(() => questions.map(() => []));
+  const [customTexts, setCustomTexts] = useState<string[]>(() => questions.map(() => ''));
   const [submitted, setSubmitted] = useState(false);
 
   const isDisabled = answered || submitted;
 
-  const handleToggleOption = (label: string) => {
+  const answers = useMemo(
+    () => questions.map((question, index) => {
+      const values = [...selectedOptions[index]];
+      const customText = customTexts[index]?.trim();
+      if (question.custom && customText) {
+        values.push(customText);
+      }
+      return values;
+    }),
+    [customTexts, questions, selectedOptions],
+  );
+
+  const hasAnyAnswer = answers.some((value) => value.length > 0);
+
+  const toggleOption = (questionIndex: number, label: string) => {
     if (isDisabled) return;
 
-    if (question.multiple) {
-      // Multi-select: toggle the option in/out of the set
-      setSelectedOptions((prev) => {
-        const next = new Set(prev);
-        if (next.has(label)) {
-          next.delete(label);
+    setSelectedOptions((prev) => {
+      const next = [...prev];
+      const current = new Set(next[questionIndex] || []);
+
+      if (questions[questionIndex].multiple) {
+        if (current.has(label)) {
+          current.delete(label);
         } else {
-          next.add(label);
+          current.add(label);
         }
-        return next;
-      });
-    } else {
-      // Single-select: pick immediately and submit
-      setSubmitted(true);
-      onAnswer([label]);
-    }
+        next[questionIndex] = Array.from(current);
+      } else {
+        next[questionIndex] = [label];
+      }
+
+      return next;
+    });
   };
 
-  const handleSubmitMultiple = () => {
+  const updateCustomText = (questionIndex: number, value: string) => {
     if (isDisabled) return;
-    const labels = Array.from(selectedOptions);
-    if (labels.length === 0 && !customText.trim()) return;
 
-    const answers = [...labels];
-    if (customText.trim()) {
-      answers.push(customText.trim());
-    }
+    setCustomTexts((prev) => {
+      const next = [...prev];
+      next[questionIndex] = value;
+      return next;
+    });
+  };
+
+  const handleSubmit = () => {
+    if (isDisabled || !hasAnyAnswer) return;
     setSubmitted(true);
     onAnswer(answers);
   };
 
-  const handleSubmitCustomOnly = () => {
-    if (isDisabled || !customText.trim()) return;
-    setSubmitted(true);
-    onAnswer([customText.trim()]);
-  };
-
-  const hasOptions = question.options && question.options.length > 0;
-
   return (
     <View className="bg-surface-elevated p-4 rounded-lg border border-border mt-2">
-      {/* Header */}
-      {question.header ? (
-        <Text className="text-text-muted text-xs font-semibold uppercase tracking-wide mb-1">
-          {question.header}
-        </Text>
-      ) : null}
+      {questions.map((question, questionIndex) => {
+        const hasOptions = question.options && question.options.length > 0;
+        const selected = new Set(selectedOptions[questionIndex] || []);
+        const customText = customTexts[questionIndex] || '';
 
-      {/* Question text */}
-      <Text className="text-text font-medium mb-3">{question.question}</Text>
+        return (
+          <View key={`${question.requestId}-${questionIndex}`} className={questionIndex > 0 ? 'mt-4 pt-4 border-t border-border' : ''}>
+            {question.header ? (
+              <Text className="text-text-muted text-xs font-semibold uppercase tracking-wide mb-1">
+                {question.header}
+              </Text>
+            ) : null}
 
-      {/* Options list */}
-      {hasOptions && (
-        <View className="mb-2">
-          {question.options.map((opt) => {
-            const isSelected = selectedOptions.has(opt.label);
-            return (
-              <TouchableOpacity
-                key={opt.label}
-                onPress={() => handleToggleOption(opt.label)}
-                disabled={isDisabled}
-                className={`p-3 rounded-md border mb-2 ${
-                  isSelected
-                    ? 'bg-primary/10 border-primary'
-                    : 'bg-surface border-border'
-                } ${isDisabled && !isSelected ? 'opacity-50' : ''}`}
-              >
-                <Text
-                  className={`${
-                    isSelected ? 'text-primary' : 'text-text'
-                  } font-medium`}
-                >
-                  {opt.label}
-                </Text>
-                {opt.description ? (
-                  <Text className="text-text-subtle text-xs mt-0.5">
-                    {opt.description}
-                  </Text>
-                ) : null}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
+            {questions.length > 1 ? (
+              <Text className="text-text-subtle text-xs mb-1">Question {questionIndex + 1}</Text>
+            ) : null}
 
-      {/* Custom text input - always available for "Other" option */}
+            <Text className="text-text font-medium mb-3">{question.question}</Text>
+
+            {hasOptions && (
+              <View className="mb-2">
+                {question.options.map((opt) => {
+                  const isSelected = selected.has(opt.label);
+                  return (
+                    <TouchableOpacity
+                      key={opt.label}
+                      onPress={() => toggleOption(questionIndex, opt.label)}
+                      disabled={isDisabled}
+                      className={`p-3 rounded-md border mb-2 ${
+                        isSelected ? 'bg-primary/10 border-primary' : 'bg-surface border-border'
+                      } ${isDisabled && !isSelected ? 'opacity-50' : ''}`}
+                    >
+                      <Text className={`${isSelected ? 'text-primary' : 'text-text'} font-medium`}>
+                        {opt.label}
+                      </Text>
+                      {opt.description ? (
+                        <Text className="text-text-subtle text-xs mt-0.5">{opt.description}</Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            {question.custom ? (
+              <View className={`p-3 rounded-md border ${customText.trim() ? 'bg-primary/10 border-primary' : 'bg-surface border-border'}`}>
+                <TextInput
+                  value={customText}
+                  onChangeText={(value) => updateCustomText(questionIndex, value)}
+                  editable={!isDisabled}
+                  placeholder="Type your answer..."
+                  placeholderTextColor={colors.textSubtle}
+                  className={`${customText.trim() ? 'text-primary' : 'text-text'} font-medium`}
+                  returnKeyType="done"
+                />
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+
       <TouchableOpacity
-        onPress={() => {
-          // In single-select mode with options, allow clicking to submit custom text
-          if (!question.multiple && hasOptions && customText.trim()) {
-            handleSubmitCustomOnly();
-          }
-        }}
-        disabled={isDisabled || !customText.trim() || question.multiple || !hasOptions}
-        activeOpacity={!question.multiple && hasOptions && customText.trim() ? 0.7 : 1}
-        className={`p-3 rounded-md border mb-2 ${
-          customText.trim()
-            ? 'bg-primary/10 border-primary'
-            : 'bg-surface border-border'
-        } ${isDisabled && !customText.trim() ? 'opacity-50' : ''}`}
+        onPress={handleSubmit}
+        disabled={isDisabled || !hasAnyAnswer}
+        className={`px-4 py-3 rounded-md bg-primary self-end mt-4 ${
+          isDisabled || !hasAnyAnswer ? 'opacity-50' : ''
+        }`}
       >
-        <TextInput
-          value={customText}
-          onChangeText={setCustomText}
-          editable={!isDisabled}
-          placeholder="Other (type your answer)..."
-          placeholderTextColor={colors.textSubtle}
-          className={`${customText.trim() ? 'text-primary' : 'text-text'} font-medium`}
-          onSubmitEditing={hasOptions && question.multiple ? handleSubmitMultiple : handleSubmitCustomOnly}
-          returnKeyType="send"
-        />
+        <Text className="text-on-primary font-medium">Confirm</Text>
       </TouchableOpacity>
-
-      {/* Submit button for multi-select mode */}
-      {question.multiple && hasOptions && (
-        <TouchableOpacity
-          onPress={handleSubmitMultiple}
-          disabled={isDisabled || (selectedOptions.size === 0 && !customText.trim())}
-          className={`px-4 py-2 rounded-md bg-primary self-end ${
-            isDisabled || (selectedOptions.size === 0 && !customText.trim()) ? 'opacity-50' : ''
-          }`}
-        >
-          <Text className="text-on-primary font-medium">Confirm</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }

@@ -6,7 +6,7 @@
  *
  * When the app is backgrounded, the OS periodically wakes us up
  * (minimum ~15 min on both platforms) to poll each configured server
- * for status changes and pending questions.
+ * for status changes and pending questions/permissions.
  */
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundTask from 'expo-background-task';
@@ -43,18 +43,23 @@ TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
         const sessionTitleMap = new Map(sessions.map((s) => [s.id, s.title]));
 
         // Fetch current state from server
-        const [statuses, questions] = await Promise.all([
+        const [statuses, questions, permissions] = await Promise.all([
           service.getSessionStatuses(),
           service.listPendingQuestions(),
+          service.listPendingPermissions(),
         ]);
 
         const currentBusyIds = Object.keys(statuses);
         const currentQuestionIds = questions.map((q) => q.id);
+        const currentPermissionIds = permissions.map((p) => p.id);
 
         // Load previous poll state for diffing
         const prevState = await loadPollState(server.id);
 
         if (prevState) {
+          const previousQuestionIds = prevState.pendingQuestionIds || [];
+          const previousPermissionIds = prevState.pendingPermissionIds || [];
+
           // Detect sessions that were busy but are now idle → agent finished
           for (const prevBusyId of prevState.busySessionIds) {
             if (!currentBusyIds.includes(prevBusyId)) {
@@ -65,10 +70,22 @@ TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
 
           // Detect new pending questions
           for (const q of questions) {
-            if (!prevState.pendingQuestionIds.includes(q.id)) {
+            if (!previousQuestionIds.includes(q.id)) {
               const title = sessionTitleMap.get(q.sessionID) || 'Session';
               const header = q.questions?.[0]?.header || '';
               await notificationService.notifyQuestionAsked(q.sessionID, server.id, title, header);
+            }
+          }
+
+          for (const permission of permissions) {
+            if (!previousPermissionIds.includes(permission.id)) {
+              const title = sessionTitleMap.get(permission.sessionID) || 'Session';
+              await notificationService.notifyPermissionAsked(
+                permission.sessionID,
+                server.id,
+                title,
+                permission.permission.type,
+              );
             }
           }
 
@@ -85,6 +102,7 @@ TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
         const newState: PollState = {
           busySessionIds: currentBusyIds,
           pendingQuestionIds: currentQuestionIds,
+          pendingPermissionIds: currentPermissionIds,
           timestamp: Date.now(),
         };
         await savePollState(server.id, newState);

@@ -9,11 +9,12 @@
  * from background, reconnects the SSE and polls the server to catch up
  * on anything that happened while JS was suspended.
  */
-import React, { createContext, useContext, useEffect, useRef, useCallback } from 'react';
-import { AppState, AppStateStatus, Platform } from 'react-native';
+import React, { createContext, useContext, useEffect, useRef, useCallback, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import EventSource from 'react-native-sse';
+import base64 from 'base-64';
 import { useStore } from '../store';
-import { OpenCodeService, QuestionAskedEvent } from '../services/opencode';
+import { OpenCodeService, PermissionAskedEvent, QuestionAskedEvent } from '../services/opencode';
 import { notificationService } from '../services/notifications';
 import { savePollState, PollState } from '../services/notificationState';
 import { Server } from '../types';
@@ -28,10 +29,13 @@ const MAX_RECONNECT_MS = 30000;
 interface NotificationContextValue {
   /** Currently pending questions across all sessions (from SSE) */
   pendingQuestions: QuestionAskedEvent[];
+  /** Currently pending permissions across all sessions (from SSE) */
+  pendingPermissions: PermissionAskedEvent[];
 }
 
 const NotificationContext = createContext<NotificationContextValue>({
   pendingQuestions: [],
+  pendingPermissions: [],
 });
 
 export function useNotificationContext() {
@@ -40,6 +44,8 @@ export function useNotificationContext() {
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { servers, sessions, viewedSessionId } = useStore();
+  const [pendingQuestions, setPendingQuestions] = useState<QuestionAskedEvent[]>([]);
+  const [pendingPermissions, setPendingPermissions] = useState<PermissionAskedEvent[]>([]);
 
   // Track which server we're currently connected to
   const connectedServerRef = useRef<Server | null>(null);
@@ -51,7 +57,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const lastMessageTimeRef = useRef<Map<string, number>>(new Map());
   const knownBusySessionsRef = useRef<Set<string>>(new Set());
   const knownQuestionIdsRef = useRef<Set<string>>(new Set());
-  const pendingQuestionsRef = useRef<QuestionAskedEvent[]>([]);
+  const knownPermissionIdsRef = useRef<Set<string>>(new Set());
 
   // AppState tracking
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -61,15 +67,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     (sessionId: string) => {
       const session = sessions.find((s) => s.id === sessionId);
       return session?.title || 'Session';
-    },
-    [sessions],
-  );
-
-  // Get the server ID for a session (for notification data)
-  const getServerIdForSession = useCallback(
-    (sessionId: string) => {
-      const session = sessions.find((s) => s.id === sessionId);
-      return session?.serverId || connectedServerRef.current?.id || '';
     },
     [sessions],
   );
@@ -95,12 +92,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         eventSourceRef.current = null;
       }
 
-      const service = new OpenCodeService(server);
       const baseUrl = `http${server.useSSL ? 's' : ''}://${server.host}:${server.port}`;
       const headers: Record<string, string> = {};
 
       if (server.apiKey) {
-        headers.Authorization = `Basic ${btoa(`opencode:${server.apiKey}`)}`;
+        headers.Authorization = `Basic ${base64.encode(`opencode:${server.apiKey}`)}`;
       }
 
       const es = new EventSource(`${baseUrl}/event`, { headers });
@@ -215,11 +211,44 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             questions: props.questions || [],
             tool: props.tool,
           };
-          pendingQuestionsRef.current = [...pendingQuestionsRef.current, event];
+          setPendingQuestions((prev) => [...prev.filter((item) => item.id !== event.id), event]);
 
           if (shouldNotify(sessionId)) {
             const title = getSessionTitle(sessionId);
             notificationService.notifyQuestionAsked(sessionId, server.id, title, header);
+          }
+        }
+        return;
+      }
+
+      // ── permission.asked ──
+      if (data.type === 'permission.asked' && props?.id) {
+        const permissionId = props.id;
+        if (!knownPermissionIdsRef.current.has(permissionId)) {
+          knownPermissionIdsRef.current.add(permissionId);
+
+          const sessionId = props.sessionID;
+          const event: PermissionAskedEvent = {
+            id: props.id,
+            sessionID: sessionId,
+            permission: {
+              type: props.permission,
+              patterns: props.patterns,
+              metadata: props.metadata,
+              always: props.always,
+            },
+            tool: props.tool,
+          };
+          setPendingPermissions((prev) => [...prev.filter((item) => item.id !== event.id), event]);
+
+          if (shouldNotify(sessionId)) {
+            const title = getSessionTitle(sessionId);
+            notificationService.notifyPermissionAsked(
+              sessionId,
+              server.id,
+              title,
+              props.permission,
+            );
           }
         }
         return;
@@ -235,9 +264,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       try {
         const service = new OpenCodeService(server);
 
-        const [statuses, questions] = await Promise.all([
+        const [statuses, questions, permissions] = await Promise.all([
           service.getSessionStatuses(),
           service.listPendingQuestions(),
+          service.listPendingPermissions(),
         ]);
 
         const currentBusyIds = new Set(Object.keys(statuses));
@@ -258,16 +288,35 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             const sessionId = q.sessionID;
             const header = q.questions?.[0]?.header || '';
 
-            pendingQuestionsRef.current = [...pendingQuestionsRef.current, {
+            setPendingQuestions((prev) => [...prev.filter((item) => item.id !== q.id), {
               id: q.id,
               sessionID: sessionId,
               questions: q.questions || [],
               tool: q.tool,
-            }];
+            }]);
 
             if (shouldNotify(sessionId)) {
               const title = getSessionTitle(sessionId);
               notificationService.notifyQuestionAsked(sessionId, server.id, title, header);
+            }
+          }
+        }
+
+        for (const permission of permissions) {
+          if (!knownPermissionIdsRef.current.has(permission.id)) {
+            knownPermissionIdsRef.current.add(permission.id);
+
+            const sessionId = permission.sessionID;
+            setPendingPermissions((prev) => [...prev.filter((item) => item.id !== permission.id), permission]);
+
+            if (shouldNotify(sessionId)) {
+              const title = getSessionTitle(sessionId);
+              notificationService.notifyPermissionAsked(
+                sessionId,
+                server.id,
+                title,
+                permission.permission.type,
+              );
             }
           }
         }
@@ -287,9 +336,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         const pollState: PollState = {
           busySessionIds: Array.from(currentBusyIds),
           pendingQuestionIds: questions.map((q) => q.id),
+          pendingPermissionIds: permissions.map((permission) => permission.id),
           timestamp: Date.now(),
         };
         await savePollState(server.id, pollState);
+
+        knownQuestionIdsRef.current = new Set(questions.map((q) => q.id));
+        knownPermissionIdsRef.current = new Set(permissions.map((permission) => permission.id));
+        setPendingQuestions(questions);
+        setPendingPermissions(permissions);
       } catch (err) {
         console.error('Error polling server on resume:', err);
       }
@@ -362,7 +417,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [connectSSE, pollServerOnResume]);
 
   const contextValue: NotificationContextValue = {
-    pendingQuestions: pendingQuestionsRef.current,
+    pendingQuestions,
+    pendingPermissions,
   };
 
   return (

@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 const CHANNEL_ID = 'opencode-default';
 
-export type NotificationType = 'agent-active' | 'agent-finished' | 'question-asked';
+export type NotificationType = 'agent-active' | 'agent-finished' | 'question-asked' | 'permission-asked';
 
 export interface NotificationData {
   sessionId: string;
@@ -110,6 +110,20 @@ class NotificationService {
       'Agent needs your input',
       header ? `${header} - "${sessionTitle}"` : `Question in "${sessionTitle}"`,
       { sessionId, serverId, type: 'question-asked' },
+    );
+  }
+
+  /** Fire a "permission asked" notification */
+  async notifyPermissionAsked(
+    sessionId: string,
+    serverId: string,
+    sessionTitle: string,
+    header?: string,
+  ): Promise<string> {
+    return this.notify(
+      'Agent needs approval',
+      header ? `${header} - "${sessionTitle}"` : `Permission requested in "${sessionTitle}"`,
+      { sessionId, serverId, type: 'permission-asked' },
     );
   }
 
