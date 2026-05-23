@@ -127,7 +127,7 @@ export interface PermissionItem {
 
 /** Payload from the server's `permission.asked` SSE event */
 export interface PermissionAskedEvent {
-  id: string;           // requestID – used for approve/deny
+  id: string;           // requestID – used for v2 permission replies
   sessionID: string;
   permission: PermissionItem;
   tool?: { messageID: string; callID: string };
