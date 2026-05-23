@@ -4,33 +4,23 @@ import { ChatPermission } from '../../types';
 
 interface PermissionDisplayProps {
   permission: ChatPermission;
-  /** Called when user approves the permission */
-  onApprove: () => void;
-  /** Called when user denies the permission */
-  onDeny: () => void;
+  onReply: (reply: 'once' | 'always' | 'reject') => void;
   answered?: boolean;
 }
 
 export default function PermissionDisplay({ 
   permission, 
-  onApprove, 
-  onDeny, 
+  onReply, 
   answered = false 
 }: PermissionDisplayProps) {
   const [submitted, setSubmitted] = useState(false);
 
   const isDisabled = answered || submitted;
 
-  const handleApprove = () => {
+  const handleReply = (reply: 'once' | 'always' | 'reject') => {
     if (isDisabled) return;
     setSubmitted(true);
-    onApprove();
-  };
-
-  const handleDeny = () => {
-    if (isDisabled) return;
-    setSubmitted(true);
-    onDeny();
+    onReply(reply);
   };
 
   return (
@@ -58,24 +48,38 @@ export default function PermissionDisplay({
       {/* Action buttons */}
       <View className="flex-row gap-2 mt-2">
         <TouchableOpacity
-          onPress={handleDeny}
-          disabled={isDisabled}
-          className={`flex-1 px-4 py-3 rounded-md border border-border bg-surface ${
-            isDisabled ? 'opacity-50' : ''
-          }`}
-        >
-          <Text className="text-text font-medium text-center">Deny</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleApprove}
+          onPress={() => handleReply('once')}
           disabled={isDisabled}
           className={`flex-1 px-4 py-3 rounded-md bg-primary ${
             isDisabled ? 'opacity-50' : ''
           }`}
         >
-          <Text className="text-on-primary font-medium text-center">Approve</Text>
+          <Text className="text-on-primary font-medium text-center">Once</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => handleReply('always')}
+          disabled={isDisabled}
+          className={`flex-1 px-4 py-3 rounded-md border border-border bg-surface ${
+            isDisabled ? 'opacity-50' : ''
+          }`}
+        >
+          <Text className="text-text font-medium text-center">Always</Text>
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity
+        onPress={() => handleReply('reject')}
+        disabled={isDisabled}
+        className={`px-4 py-3 rounded-md bg-danger mt-2 ${
+          isDisabled ? 'opacity-50' : ''
+        }`}
+      >
+        <Text className="text-on-primary font-medium text-center">Deny</Text>
+      </TouchableOpacity>
+
+      <Text className="text-text-subtle text-xs mt-3">
+        Once approves just this request. Always remembers this pattern for future requests.
+      </Text>
     </View>
   );
 }

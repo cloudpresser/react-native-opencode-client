@@ -93,6 +93,8 @@ export interface StreamPartUpdated {
 
 export type StreamPartEvent = StreamPartUpdated | StreamPartDelta;
 
+export type PermissionReply = 'once' | 'always' | 'reject';
+
 /** Shape of an individual question inside a question.asked SSE event */
 export interface QuestionOption {
   label: string;
@@ -709,33 +711,18 @@ export class OpenCodeService {
   }
 
   /**
-   * Approve a permission request.
+   * Reply to a permission request using the v2 API contract.
    */
-  async approvePermission(requestId: string): Promise<boolean> {
+  async replyToPermission(requestId: string, reply: PermissionReply, message?: string): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/permission/${requestId}/approve`, {
+      const response = await fetch(`${this.baseUrl}/permission/${requestId}/reply`, {
         method: 'POST',
         headers: this.getHeaders(),
+        body: JSON.stringify({ reply, ...(message ? { message } : {}) }),
       });
       return response.ok;
     } catch (error) {
-      console.error('Error approving permission:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Deny a permission request.
-   */
-  async denyPermission(requestId: string): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.baseUrl}/permission/${requestId}/deny`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-      });
-      return response.ok;
-    } catch (error) {
-      console.error('Error denying permission:', error);
+      console.error('Error replying to permission:', error);
       return false;
     }
   }
