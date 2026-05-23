@@ -47,6 +47,7 @@ interface WaitForStreamOptions {
   sessionId: string;
   prompt: string;
   timeoutMs?: number;
+  onEvent?: (event: SseEvent, events: SseEvent[]) => Promise<void> | void;
   stopWhen: (event: SseEvent, events: SseEvent[]) => boolean;
 }
 
@@ -225,11 +226,12 @@ async function replyToQuestion(requestId: string, answers: string[][]) {
   assert(response.ok, `Failed to reply to question ${requestId}: ${response.status}`);
 }
 
-async function denyPermission(requestId: string) {
-  const response = await requestJson(`${BASE_URL}/permission/${requestId}/deny`, {
+async function replyToPermission(requestId: string, reply: 'once' | 'always' | 'reject', message?: string) {
+  const response = await requestJson(`${BASE_URL}/permission/${requestId}/reply`, {
     method: 'POST',
+    body: JSON.stringify({ reply, ...(message ? { message } : {}) }),
   });
-  assert(response.ok, `Failed to deny permission ${requestId}: ${response.status}`);
+  assert(response.ok, `Failed to reply to permission ${requestId}: ${response.status}`);
 }
 
 async function waitForCondition<T>(
@@ -252,7 +254,7 @@ async function waitForCondition<T>(
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function waitForStream({ sessionId, prompt, timeoutMs = 90000, stopWhen }: WaitForStreamOptions) {
+async function waitForStream({ sessionId, prompt, timeoutMs = 90000, onEvent, stopWhen }: WaitForStreamOptions) {
   const controller = new AbortController();
   const response = await requestJson(`${BASE_URL}/event`, {
     headers: authHeaders(),
@@ -322,6 +324,9 @@ async function waitForStream({ sessionId, prompt, timeoutMs = 90000, stopWhen }:
         }
 
         events.push(event);
+        if (onEvent) {
+          await onEvent(event, events);
+        }
         if (stopWhen(event, events)) {
           return events;
         }
@@ -444,12 +449,26 @@ async function run() {
       );
     });
 
-    await testWithRetries('captures a permission payload and clears it after deny', 3, async (attempt) => {
+    await testWithRetries('captures a permission payload and clears it after v2 reply', 3, async (attempt) => {
       const session = await createSession(`chat-api-permission-attempt-${attempt}`, { model: TEST_MODEL });
+      let replied = false;
+      let pendingPermissionSnapshot: any | null = null;
       const events = await waitForStream({
         sessionId: session.id,
         prompt: 'Use the read tool to read ~/.zshrc. If permission is required, request permission and stop immediately without answering.',
-        stopWhen: (event) => event.type === 'permission.asked',
+        onEvent: async (event) => {
+          if (event.type !== 'permission.asked' || replied) {
+            return;
+          }
+
+          const permissionProps = event.properties || {};
+          const pendingPermissions = await listPendingPermissions();
+          pendingPermissionSnapshot = pendingPermissions.find((item: any) => item.id === permissionProps.id) ?? null;
+          assert(!!pendingPermissionSnapshot, 'Expected pending permission to appear in GET /permission before reply');
+          replied = true;
+          await replyToPermission(permissionProps.id, 'reject', 'Rejected by integration test');
+        },
+        stopWhen: (event) => event.type === 'permission.replied',
       });
 
       const permissionEvent = events.find((event) => event.type === 'permission.asked');
@@ -458,13 +477,17 @@ async function run() {
       }
       const permissionProps = permissionEvent.properties || {};
       logJson('permission.asked payload', summarizeRelevantEvent(permissionEvent));
+      assert(!!pendingPermissionSnapshot, 'Expected pending permission snapshot before reply');
+      logJson('GET /permission item', pendingPermissionSnapshot);
 
-      const pendingPermissions = await listPendingPermissions();
-      const pendingPermission = pendingPermissions.find((item: any) => item.id === permissionProps.id);
-      assert(!!pendingPermission, 'Expected pending permission to appear in GET /permission');
-      logJson('GET /permission item', pendingPermission);
+      const permissionRepliedEvent = events.find(
+        (event) => event.type === 'permission.replied' && event.properties?.requestID === permissionProps.id,
+      );
+      if (!permissionRepliedEvent) {
+        throw new Error('Expected a permission.replied event for the replied permission');
+      }
+      logJson('permission.replied payload', summarizeRelevantEvent(permissionRepliedEvent));
 
-      await denyPermission(permissionProps.id);
       await waitForCondition(
         `permission ${permissionProps.id} to clear`,
         listPendingPermissions,

@@ -24,6 +24,7 @@ import {
   OpenCodeService,
   Message as ApiMessage,
   MessagePart as ApiMessagePart,
+  PermissionReply,
   StreamPartEvent,
   ToolMetadata,
   QuestionAskedEvent,
@@ -680,40 +681,21 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   };
 
   /**
-   * Approve a pending permission request from the server.
+   * Reply to a pending permission request using the v2 reply semantics.
    */
-  const handleApprovePermission = async (requestId: string) => {
+  const handleReplyPermission = async (requestId: string, reply: PermissionReply) => {
     try {
-      const ok = await service.approvePermission(requestId);
+      const ok = await service.replyToPermission(requestId, reply);
       if (!ok) {
-        Alert.alert('Error', 'Failed to approve permission');
+        Alert.alert('Error', 'Failed to reply to permission');
         return;
       }
       resolvedPermissionIdsRef.current.add(requestId);
       setPendingPermission(null);
       setBlockedPlaceholder(null);
     } catch (error) {
-      console.error('Error approving permission:', error);
-      Alert.alert('Error', 'Failed to approve permission');
-    }
-  };
-
-  /**
-   * Deny a pending permission request from the server.
-   */
-  const handleDenyPermission = async (requestId: string) => {
-    try {
-      const ok = await service.denyPermission(requestId);
-      if (!ok) {
-        Alert.alert('Error', 'Failed to deny permission');
-        return;
-      }
-      resolvedPermissionIdsRef.current.add(requestId);
-      setPendingPermission(null);
-      setBlockedPlaceholder(null);
-    } catch (error) {
-      console.error('Error denying permission:', error);
-      Alert.alert('Error', 'Failed to deny permission');
+      console.error('Error replying to permission:', error);
+      Alert.alert('Error', 'Failed to reply to permission');
     }
   };
 
@@ -896,8 +878,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
                 type: item.event.permission.type,
                 ...formatPermissionMessage(item.event),
               }}
-              onApprove={() => handleApprovePermission(item.event.id)}
-              onDeny={() => handleDenyPermission(item.event.id)}
+              onReply={(reply) => handleReplyPermission(item.event.id, reply)}
             />
           </View>
         );
