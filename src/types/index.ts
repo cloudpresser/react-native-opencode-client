@@ -116,6 +116,7 @@ export interface ChatPermission {
 }
 
 export interface ChatMessagePart {
+  id?: string;
   type: 'text' | 'tool-call' | 'reasoning';
   content?: string;
   toolCall?: ChatMessageToolCall;
@@ -170,4 +171,3 @@ export interface TerminalState {
   currentInput: string;
   isProcessing: boolean;
 }
-

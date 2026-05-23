@@ -24,6 +24,7 @@ import {
   OpenCodeService,
   Message as ApiMessage,
   MessagePart as ApiMessagePart,
+  StreamPartEvent,
   ToolMetadata,
   QuestionAskedEvent,
   PermissionAskedEvent,
@@ -67,6 +68,10 @@ function createStreamingMessage(sessionId: string): ChatMessage {
   };
 }
 
+function isTransientStreamingMessage(message: ChatMessage): boolean {
+  return message.id.startsWith('streaming-');
+}
+
 function isUserPromptEcho(part: ApiMessagePart & { sessionID?: string }, delta: string | undefined, promptText: string): boolean {
   return part.type === 'text' && !delta && part.text === promptText;
 }
@@ -105,8 +110,7 @@ function formatPermissionMessage(event: PermissionAskedEvent): { message: string
 function applyStreamUpdate(
   current: ChatMessage | null,
   sessionId: string,
-  part: ApiMessagePart & { sessionID?: string },
-  delta?: string,
+  event: StreamPartEvent,
 ): ChatMessage {
   const next = current
     ? { ...current, parts: current.parts ? [...current.parts] : [] }
@@ -114,24 +118,83 @@ function applyStreamUpdate(
 
   const parts = next.parts || [];
 
-  if (part.type === 'text' || part.type === 'reasoning') {
+  const upsertPart = (candidate: ChatMessagePart, predicate: (part: ChatMessagePart) => boolean) => {
+    const existingIndex = parts.findIndex(predicate);
+    if (existingIndex >= 0) {
+      parts[existingIndex] = { ...parts[existingIndex], ...candidate };
+      return parts[existingIndex];
+    }
+    parts.push(candidate);
+    return candidate;
+  };
+
+  if (event.type === 'message.part.delta') {
+    if (event.field !== 'text') {
+      return next;
+    }
+
+    const existingIndex = parts.findIndex((part) => part.id === event.partID);
+    if (existingIndex >= 0) {
+      const existing = parts[existingIndex];
+      parts[existingIndex] = {
+        ...existing,
+        content: `${existing.content || ''}${event.delta}`,
+      };
+    } else {
+      parts.push({
+        id: event.partID,
+        type: 'text',
+        content: event.delta,
+      });
+    }
+
+    next.parts = parts;
+    next.content = buildPlainContent(parts);
+    return next;
+  }
+
+  const { part, delta } = event;
+
+  if (part.type === 'reasoning') {
+    const reasoningContent = typeof part.text === 'string' ? part.text : delta || '';
+    const previous = parts.find((item) => item.id === part.id);
+    const nextContent =
+      typeof part.text === 'string' && part.text.length > 0
+        ? part.text
+        : `${previous?.content || ''}${delta || ''}`;
+
+    upsertPart(
+      {
+        id: part.id,
+        type: 'reasoning',
+        content: nextContent,
+      },
+      (item) => item.id === part.id,
+    );
+
+    next.parts = parts;
+    next.content = buildPlainContent(parts);
+    return next;
+  }
+
+  if (part.type === 'text') {
     const content = typeof part.text === 'string' ? part.text : delta || '';
     if (!content) {
       return next;
     }
 
-    const lastPart = parts[parts.length - 1];
-    if (lastPart?.type === part.type) {
-      parts[parts.length - 1] = {
+    const previous = parts.find((item) => item.id === part.id);
+    upsertPart(
+      {
+        id: part.id,
         type: part.type,
         content:
           typeof part.text === 'string'
             ? part.text
-            : `${lastPart.content || ''}${delta || ''}`,
-      };
-    } else {
-      parts.push({ type: part.type, content });
-    }
+            : `${previous?.content || ''}${delta || ''}`,
+      },
+      (item) => item.id === part.id,
+    );
 
     next.parts = parts;
     next.content = buildPlainContent(parts);
@@ -141,6 +204,7 @@ function applyStreamUpdate(
   if (part.type === 'tool-invocation') {
     const invocation = part.toolInvocation;
     const toolCall: ChatMessagePart = {
+      id: part.id,
       type: 'tool-call',
       toolCall: {
         toolCallId: invocation.toolCallId,
@@ -152,7 +216,7 @@ function applyStreamUpdate(
     };
 
     const existingIndex = parts.findIndex(
-      (item) => item.type === 'tool-call' && item.toolCall?.toolCallId === invocation.toolCallId,
+      (item) => item.id === part.id || (item.type === 'tool-call' && item.toolCall?.toolCallId === invocation.toolCallId),
     );
 
     if (existingIndex >= 0) {
@@ -178,16 +242,17 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
   for (const part of apiMsg.parts) {
     switch (part.type) {
       case 'text':
-        chatParts.push({ type: 'text', content: part.text });
+        chatParts.push({ id: part.id, type: 'text', content: part.text });
         plainContent += part.text;
         break;
       case 'reasoning':
-        chatParts.push({ type: 'reasoning', content: part.text });
+        chatParts.push({ id: part.id, type: 'reasoning', content: part.text });
         break;
       case 'tool-invocation': {
         const inv = part.toolInvocation;
         const meta: ToolMetadata | undefined = toolMeta[inv.toolCallId];
         chatParts.push({
+          id: part.id,
           type: 'tool-call',
           toolCall: {
             toolCallId: inv.toolCallId,
@@ -546,11 +611,11 @@ export default function ChatTab({ session, server }: ChatTabProps) {
         messageText,
         preparedAttachments.length > 0 ? preparedAttachments : undefined,
         {
-          onPartUpdated: (part, delta) => {
-            if (!streamingMessage && isUserPromptEcho(part, delta, messageText)) {
+          onPartUpdated: (event) => {
+            if (event.type === 'message.part.updated' && !streamingMessage && isUserPromptEcho(event.part, event.delta, messageText)) {
               return;
             }
-            setStreamingMessage((current) => applyStreamUpdate(current, session.id, part, delta));
+            setStreamingMessage((current) => applyStreamUpdate(current, session.id, event));
             setBlockedPlaceholder(null);
           },
           onQuestionAsked: async (event) => {
@@ -654,6 +719,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
 
   const renderMessageContent = (item: ChatMessage) => {
     const isUser = item.role === 'user';
+    const isTransient = isTransientStreamingMessage(item);
     const parts = item.parts;
 
     // If no parts, fall back to plain content rendered as markdown
@@ -686,7 +752,15 @@ export default function ChatTab({ session, server }: ChatTabProps) {
 
             case 'reasoning':
               if (!part.content?.trim()) {
-                return null;
+                if (!isTransient) {
+                  return null;
+                }
+                return (
+                  <View key={idx} className="border-l-2 border-info pl-2 mb-2 opacity-70">
+                    <Text className="text-text-muted text-[10px] font-semibold mb-0.5">Thinking</Text>
+                    <Text className="text-text-muted text-[13px] italic leading-4">Thinking...</Text>
+                  </View>
+                );
               }
               return (
                 <View key={idx} className="border-l-2 border-info pl-2 mb-2 opacity-70">

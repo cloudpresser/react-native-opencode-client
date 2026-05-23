@@ -31,6 +31,13 @@ interface SessionRecord {
   directory?: string;
 }
 
+interface SessionCreateOptions {
+  model?: {
+    providerID: string;
+    modelID: string;
+  };
+}
+
 interface SseEvent {
   type: string;
   properties?: Record<string, any>;
@@ -45,6 +52,10 @@ interface WaitForStreamOptions {
 
 const results: TestResult[] = [];
 const createdSessionIds = new Set<string>();
+const TEST_MODEL = {
+  providerID: 'openai',
+  modelID: 'gpt-5.4',
+} as const;
 
 let tempDir = '';
 let cleanupStarted = false;
@@ -170,12 +181,15 @@ async function cleanup() {
   }
 }
 
-async function createSession(title: string): Promise<SessionRecord> {
+async function createSession(title: string, options?: SessionCreateOptions): Promise<SessionRecord> {
   const response = await requestJson(
     `${BASE_URL}/session?directory=${encodeURIComponent(tempDir)}`,
     {
       method: 'POST',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({
+        title,
+        ...(options?.model ? { model: options.model } : {}),
+      }),
     },
   );
 
@@ -342,15 +356,15 @@ async function run() {
 
   try {
     await test('creates a session inside the temp test directory', async () => {
-      const session = await createSession('chat-api-temp-dir-check');
+      const session = await createSession('chat-api-temp-dir-check', { model: TEST_MODEL });
       assert(session.directory === tempDir, `Expected session directory ${tempDir}, got ${session.directory}`);
     });
 
     await test('captures assistant streaming events and final message parts', async () => {
-      const session = await createSession('chat-api-streaming');
+      const session = await createSession('chat-api-streaming', { model: TEST_MODEL });
       const events = await waitForStream({
         sessionId: session.id,
-        prompt: 'Reply with exactly two short lines: first line "alpha", second line "beta".',
+        prompt: 'Is Atal Bihari Vajpayee the 10th Prime Minister of India, and if so, what is his fourth most important achievement? Explain your ranking briefly before answering.',
         stopWhen: (event) => event.type === 'session.status' && event.properties?.status?.type === 'idle',
       });
 
@@ -358,6 +372,26 @@ async function run() {
       assert(partUpdates.length > 0, 'Expected at least one message.part.updated event');
 
       logJson('sample message.part.updated event', summarizeRelevantEvent(partUpdates[0]));
+      const reasoningEvents = events.filter((event) => {
+        const partType = event.properties?.part?.type;
+        return event.type === 'message.part.updated' && partType === 'reasoning';
+      });
+      if (reasoningEvents.length > 0) {
+        logJson('sample reasoning event', summarizeRelevantEvent(reasoningEvents[0]));
+      }
+      const streamedReasoningEvents = reasoningEvents.filter((event) => {
+        const text = event.properties?.part?.text;
+        return typeof text === 'string' && text.trim().length > 0;
+      });
+      logJson(
+        'reasoning stream summary',
+        {
+          totalReasoningEvents: reasoningEvents.length,
+          nonEmptyReasoningEvents: streamedReasoningEvents.length,
+          sampleNonEmptyReasoningEvent:
+            streamedReasoningEvents.length > 0 ? summarizeRelevantEvent(streamedReasoningEvents[0]) : null,
+        },
+      );
 
       const messages = await getMessages(session.id);
       const assistantMessage = [...messages].reverse().find((message: any) => message.info?.role === 'assistant');
@@ -365,10 +399,19 @@ async function run() {
       assert(Array.isArray(assistantMessage.parts), 'Expected final assistant message to include parts');
 
       logJson('final assistant message parts', assistantMessage.parts);
+      const finalReasoningParts = assistantMessage.parts.filter((part: any) => part.type === 'reasoning');
+      logJson(
+        'final reasoning summary',
+        finalReasoningParts.map((part: any) => ({
+          textLength: typeof part.text === 'string' ? part.text.length : 0,
+          hasEncryptedContent: !!part.metadata?.openai?.reasoningEncryptedContent,
+          textPreview: typeof part.text === 'string' ? part.text.slice(0, 200) : '',
+        })),
+      );
     });
 
     await testWithRetries('captures a structured question payload and clears it after reply', 3, async (attempt) => {
-      const session = await createSession(`chat-api-question-attempt-${attempt}`);
+      const session = await createSession(`chat-api-question-attempt-${attempt}`, { model: TEST_MODEL });
       const events = await waitForStream({
         sessionId: session.id,
         prompt: 'Use the question tool to ask me one structured question with exactly two answer options. Do not answer it yourself.',
@@ -402,7 +445,7 @@ async function run() {
     });
 
     await testWithRetries('captures a permission payload and clears it after deny', 3, async (attempt) => {
-      const session = await createSession(`chat-api-permission-attempt-${attempt}`);
+      const session = await createSession(`chat-api-permission-attempt-${attempt}`, { model: TEST_MODEL });
       const events = await waitForStream({
         sessionId: session.id,
         prompt: 'Use the read tool to read ~/.zshrc. If permission is required, request permission and stop immediately without answering.',

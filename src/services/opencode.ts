@@ -2,12 +2,18 @@ import { Server, Session, GitFile, Project, FileNode, Agent } from '../types';
 import EventSource from 'react-native-sse';
 import base64 from 'base-64';
 
-export interface TextPart {
+interface PartEnvelope {
+  id?: string;
+  messageID?: string;
+  sessionID?: string;
+}
+
+export interface TextPart extends PartEnvelope {
   type: 'text';
   text: string;
 }
 
-export interface ReasoningPart {
+export interface ReasoningPart extends PartEnvelope {
   type: 'reasoning';
   text: string;
 }
@@ -31,7 +37,7 @@ export interface ToolInvocationResult {
 
 export type ToolInvocation = ToolInvocationCall | ToolInvocationResult;
 
-export interface ToolInvocationPart {
+export interface ToolInvocationPart extends PartEnvelope {
   type: 'tool-invocation';
   toolInvocation: ToolInvocation;
 }
@@ -69,6 +75,23 @@ export type MessagePart =
   | StepStartPart
   | FilePart
   | ImagePart;
+
+export interface StreamPartDelta {
+  type: 'message.part.delta';
+  sessionID: string;
+  messageID: string;
+  partID: string;
+  field: string;
+  delta: string;
+}
+
+export interface StreamPartUpdated {
+  type: 'message.part.updated';
+  part: MessagePart;
+  delta?: string;
+}
+
+export type StreamPartEvent = StreamPartUpdated | StreamPartDelta;
 
 /** Shape of an individual question inside a question.asked SSE event */
 export interface QuestionOption {
@@ -453,7 +476,7 @@ export class OpenCodeService {
     attachments?: Array<{ type: string; content: string; name: string; mimeType?: string }>,
     callbacks?: {
       onTextDelta?: (delta: string) => void;
-      onPartUpdated?: (part: any, delta?: string) => void;
+      onPartUpdated?: (event: StreamPartEvent) => void;
       onQuestionAsked?: (event: QuestionAskedEvent) => void;
       onPermissionAsked?: (event: PermissionAskedEvent) => void;
       onComplete?: () => void;
@@ -519,7 +542,7 @@ export class OpenCodeService {
             return;
           }
 
-          // Incremental text delta from assistant
+          // Full part snapshot updates from assistant
           if (data.type === 'message.part.updated') {
             const part = data.properties?.part;
             const delta = data.properties?.delta;
@@ -528,7 +551,31 @@ export class OpenCodeService {
               if (delta && part.type === 'text') {
                 callbacks?.onTextDelta?.(delta);
               }
-              callbacks?.onPartUpdated?.(part, delta);
+              callbacks?.onPartUpdated?.({
+                type: 'message.part.updated',
+                part,
+                ...(delta ? { delta } : {}),
+              });
+            }
+            return;
+          }
+
+          // Forward-compatible delta events from newer API transports
+          if (data.type === 'message.part.delta') {
+            const props = data.properties;
+
+            if (props?.sessionID === sessionId) {
+              if (props?.field === 'text' && props?.delta) {
+                callbacks?.onTextDelta?.(props.delta);
+              }
+              callbacks?.onPartUpdated?.({
+                type: 'message.part.delta',
+                sessionID: props.sessionID,
+                messageID: props.messageID,
+                partID: props.partID,
+                field: props.field,
+                delta: props.delta,
+              });
             }
             return;
           }
