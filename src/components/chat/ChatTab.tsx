@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,10 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  RefreshControl,
   Modal,
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { withUniwind } from 'uniwind';
@@ -21,7 +19,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useStore } from '../../store';
-import { Agent, ChatMessage, ChatMessagePart, ChatPermission, ChatQuestion, MessageAttachment, Server, Session } from '../../types';
+import { Agent, ChatMessage, ChatMessagePart, MessageAttachment, Server, Session } from '../../types';
 import { OpenCodeService, Message as ApiMessage, ToolMetadata, QuestionAskedEvent, PermissionAskedEvent } from '../../services/opencode';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useAppStateRefresh } from '../../hooks/useAppStateRefresh';
@@ -37,6 +35,12 @@ interface ChatTabProps {
   session: Session;
   server: Server;
 }
+
+type ChatListItem =
+  | { kind: 'message'; key: string; message: ChatMessage }
+  | { kind: 'streaming'; key: string; content: string }
+  | { kind: 'question'; key: string; event: QuestionAskedEvent }
+  | { kind: 'permission'; key: string; event: PermissionAskedEvent };
 
 function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
   const chatParts: ChatMessagePart[] = [];
@@ -110,7 +114,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
 
 export default function ChatTab({ session, server }: ChatTabProps) {
   const colors = useThemeColors();
-  const { messages, addMessage, setMessages, prependMessages, setViewedSessionId } = useStore();
+  const { messages, addMessage, setMessages, setViewedSessionId } = useStore();
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -118,8 +122,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const [streamingText, setStreamingText] = useState('');
   const [pendingQuestion, setPendingQuestion] = useState<QuestionAskedEvent | null>(null);
   const [pendingPermission, setPendingPermission] = useState<PermissionAskedEvent | null>(null);
-  const flatListRef = useRef<FlatList>(null);
-  const lastMessageIdRef = useRef<string | null>(null);
   const [service] = useState(() => new OpenCodeService(server));
 
   const [selectedAgent, setSelectedAgent] = useState<string>('');
@@ -170,17 +172,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     loadAgents();
   }, [service]);
 
-  // Auto-scroll to bottom when keyboard opens
-  useEffect(() => {
-    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(event, () => {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    });
-    return () => sub.remove();
-  }, []);
-
   const sessionMessages = messages[session.id] || [];
 
   const loadInitialMessages = useCallback(async () => {
@@ -201,17 +192,41 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     loadInitialMessages();
   }, [loadInitialMessages]);
 
-  useEffect(() => {
-    if (sessionMessages.length > 0 && !initialLoading) {
-      const currentLastMessage = sessionMessages[sessionMessages.length - 1];
-      if (currentLastMessage.id !== lastMessageIdRef.current) {
-        lastMessageIdRef.current = currentLastMessage.id;
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
+  const listItems = useMemo<ChatListItem[]>(() => {
+    const items: ChatListItem[] = [];
+
+    if (pendingPermission) {
+      items.push({
+        kind: 'permission',
+        key: `pending-permission-${pendingPermission.id}`,
+        event: pendingPermission,
+      });
     }
-  }, [sessionMessages.length, initialLoading]);
+
+    if (pendingQuestion) {
+      items.push({
+        kind: 'question',
+        key: `pending-question-${pendingQuestion.id}`,
+        event: pendingQuestion,
+      });
+    }
+
+    if (streamingText) {
+      items.push({
+        kind: 'streaming',
+        key: `streaming-${session.id}`,
+        content: streamingText,
+      });
+    }
+
+    return [
+      ...items,
+      ...sessionMessages
+        .slice()
+        .reverse()
+        .map((message) => ({ kind: 'message', key: message.id, message }) satisfies ChatListItem),
+    ];
+  }, [pendingPermission, pendingQuestion, session.id, sessionMessages, streamingText]);
 
   const handlePickFile = async () => {
     try {
@@ -246,7 +261,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   const handlePickImage = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (!permissionResult.granted) {
         Alert.alert('Permission Required', 'Please grant permission to access photos');
         return;
@@ -316,7 +331,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
       const preparedAttachments = await Promise.all(
         currentAttachments.map(async (att) => {
           let content = '';
-          
+
           if (att.type === 'image') {
             content = await FileSystem.readAsStringAsync(att.uri, {
               encoding: FileSystem.EncodingType.Base64,
@@ -472,7 +487,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
                 return <ToolCallDisplay key={part.toolCall.toolCallId || idx} toolCall={part.toolCall} />;
               }
               return null;
-            
+
             case 'reasoning':
               return (
                 <View key={idx} className="border-l-2 border-info pl-2 mb-2 opacity-70">
@@ -491,13 +506,13 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     );
   };
 
-  const renderMessage = ({ item }: { item: ChatMessage }): React.ReactElement => {
-    const isUser = item.role === 'user';
+  const renderMessage = (message: ChatMessage): React.ReactElement => {
+    const isUser = message.role === 'user';
 
     return (
       <View
         className={`rounded-xl mb-3 ${isUser ? 'self-end max-w-[80%]' : 'self-start w-full'}`}
-        testID={`message-${item.role}-${item.id}`}
+        testID={`message-${message.role}-${message.id}`}
       >
         {/* User messages get the bubble style */}
         {isUser ? (
@@ -505,12 +520,12 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             <View className="flex-row justify-between mb-1">
               <Text className="text-on-primary font-semibold text-xs">You</Text>
               <Text className="text-on-primary/70 text-[10px]">
-                {new Date(item.timestamp).toLocaleTimeString()}
+                {new Date(message.timestamp).toLocaleTimeString()}
               </Text>
             </View>
-            {item.attachments && item.attachments.length > 0 && (
+            {message.attachments && message.attachments.length > 0 && (
               <View className="mb-2">
-                {item.attachments.map((att) => (
+                {message.attachments.map((att) => (
                   <View key={att.id} className="mb-2">
                     {att.type === 'image' ? (
                       <StyledImage source={{ uri: att.uri }} className="w-48 h-48 rounded-lg" />
@@ -523,7 +538,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
                 ))}
               </View>
             )}
-            {renderMessageContent(item)}
+            {renderMessageContent(message)}
           </View>
         ) : (
           /* Assistant messages: full-width, no bubble, parts render inline */
@@ -531,12 +546,12 @@ export default function ChatTab({ session, server }: ChatTabProps) {
             <View className="flex-row justify-between mb-1 px-1">
               <Text className="text-text-muted font-semibold text-xs">Assistant</Text>
               <Text className="text-text-subtle text-[10px]">
-                {new Date(item.timestamp).toLocaleTimeString()}
+                {new Date(message.timestamp).toLocaleTimeString()}
               </Text>
             </View>
-            {item.attachments && item.attachments.length > 0 && (
+            {message.attachments && message.attachments.length > 0 && (
               <View className="mb-2">
-                {item.attachments.map((att) => (
+                {message.attachments.map((att) => (
                   <View key={att.id} className="mb-2">
                     {att.type === 'image' ? (
                       <StyledImage source={{ uri: att.uri }} className="w-48 h-48 rounded-lg" />
@@ -549,11 +564,62 @@ export default function ChatTab({ session, server }: ChatTabProps) {
                 ))}
               </View>
             )}
-            {renderMessageContent(item)}
+            {renderMessageContent(message)}
           </View>
         )}
       </View>
     );
+  };
+
+  const renderListItem = ({ item }: { item: ChatListItem }): React.ReactElement => {
+    switch (item.kind) {
+      case 'message':
+        return renderMessage(item.message);
+      case 'streaming':
+        return (
+          <View className="self-start w-full py-2 mb-3" testID="streaming-message">
+            <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
+            <MarkdownRenderer content={item.content} />
+            {!pendingQuestion && !pendingPermission && <StyledActivityIndicator className="mt-2" />}
+          </View>
+        );
+      case 'question':
+        return (
+          <View className="mb-3">
+            {item.event.questions.map((question, idx) => (
+              <QuestionDisplay
+                key={`${item.event.id}-${idx}`}
+                question={{
+                  requestId: item.event.id,
+                  question: question.question,
+                  header: question.header,
+                  options: question.options,
+                  multiple: question.multiple,
+                  custom: question.custom,
+                }}
+                onAnswer={(selectedLabels: string[]) => {
+                  handleAnswerQuestion(item.event.id, [selectedLabels]);
+                }}
+              />
+            ))}
+          </View>
+        );
+      case 'permission':
+        return (
+          <View className="mb-3">
+            <PermissionDisplay
+              permission={{
+                requestId: item.event.id,
+                message: item.event.permission.message,
+                header: item.event.permission.header,
+                details: item.event.permission.details,
+              }}
+              onApprove={() => handleApprovePermission(item.event.id)}
+              onDeny={() => handleDenyPermission(item.event.id)}
+            />
+          </View>
+        );
+    }
   };
 
   const renderAttachment = ({ item }: { item: MessageAttachment }): React.ReactElement => (
@@ -586,62 +652,17 @@ export default function ChatTab({ session, server }: ChatTabProps) {
       testID="chat-tab"
     >
       <FlatList
-        ref={flatListRef}
-        data={sessionMessages}
-        renderItem={renderMessage}
-        keyExtractor={(item: ChatMessage) => item.id}
+        data={listItems}
+        renderItem={renderListItem}
+        keyExtractor={(item: ChatListItem) => item.key}
+        inverted
         contentContainerClassName="p-4"
         testID="messages-list"
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         ListEmptyComponent={
           <View className="items-center justify-center pt-16" testID="empty-messages">
             <Text className="text-lg font-semibold text-text-muted mb-2">No messages yet</Text>
             <Text className="text-sm text-text-subtle">Start a conversation with OpenCode</Text>
           </View>
-        }
-        ListFooterComponent={
-          streamingText || pendingQuestion || pendingPermission ? (
-            <View>
-              {streamingText ? (
-                <View className="self-start w-full py-2" testID="streaming-message">
-                  <Text className="text-text-muted font-semibold text-xs mb-1 px-1">Assistant</Text>
-                  <MarkdownRenderer content={streamingText} />
-                  {!pendingQuestion && !pendingPermission && <StyledActivityIndicator className="mt-2" />}
-                </View>
-              ) : null}
-              {pendingQuestion && pendingQuestion.questions.map((q, idx) => (
-                <QuestionDisplay
-                  key={`${pendingQuestion.id}-${idx}`}
-                  question={{
-                    requestId: pendingQuestion.id,
-                    question: q.question,
-                    header: q.header,
-                    options: q.options,
-                    multiple: q.multiple,
-                    custom: q.custom,
-                  }}
-                  onAnswer={(selectedLabels: string[]) => {
-                    // Build the answers array: one entry per question
-                    // For now we only support single-question events
-                    handleAnswerQuestion(pendingQuestion.id, [selectedLabels]);
-                  }}
-                />
-              ))}
-              {pendingPermission && (
-                <PermissionDisplay
-                  key={pendingPermission.id}
-                  permission={{
-                    requestId: pendingPermission.id,
-                    message: pendingPermission.permission.message,
-                    header: pendingPermission.permission.header,
-                    details: pendingPermission.permission.details,
-                  }}
-                  onApprove={() => handleApprovePermission(pendingPermission.id)}
-                  onDeny={() => handleDenyPermission(pendingPermission.id)}
-                />
-              )}
-            </View>
-          ) : null
         }
       />
 
@@ -650,7 +671,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           horizontal
           data={attachments}
           renderItem={renderAttachment}
-keyExtractor={(item: MessageAttachment) => item.id}
+          keyExtractor={(item: MessageAttachment) => item.id}
           contentContainerClassName="px-4 py-2 bg-surface border-t border-border"
           testID="attachments-list"
         />
@@ -678,15 +699,15 @@ keyExtractor={(item: MessageAttachment) => item.id}
 
         {/* Input row */}
         <View className="flex-row items-end px-3 pb-3 pt-1">
-          <TouchableOpacity 
+          <TouchableOpacity
             className="p-2 mr-1"
             onPress={handlePickFile}
             testID="attach-file-button"
           >
             <Text className="text-xl">📎</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             className="p-2 mr-1"
             onPress={handlePickImage}
             testID="attach-image-button"
