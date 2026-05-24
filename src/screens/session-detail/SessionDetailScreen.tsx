@@ -110,6 +110,7 @@ export default function SessionDetailScreen() {
   return (
     <Tab.Navigator
       screenOptions={{
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopWidth: 1,

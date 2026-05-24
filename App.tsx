@@ -4,6 +4,7 @@ import { NavigationContainer, DarkTheme, NavigationContainerRef } from '@react-n
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 import * as Notifications from 'expo-notifications';
 
@@ -59,31 +60,33 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <ServerStatusProvider>
-        <NotificationProvider>
-          <StyledView className="flex-1 bg-background">
-            <NavigationContainer ref={navigationRef} theme={DarkTheme}>
-              <StatusBar style="light" />
-              <Stack.Navigator
-                initialRouteName="Servers"
-                screenOptions={{
-                  headerShown: false,
-                }}
-              >
-                <Stack.Screen name="Servers" component={ServersScreen} />
-                <Stack.Screen name="Projects" component={ProjectsScreen} />
-                <Stack.Screen name="SelectDirectory" component={SelectDirectoryScreen} />
-                <Stack.Screen name="Sessions" component={SessionsScreen} />
-                <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
-                <Stack.Screen name="AddEditServer" component={AddEditServerScreen} />
-                <Stack.Screen name="NewSession" component={NewSessionScreen} />
-                <Stack.Screen name="GitDiffViewer" component={GitDiffViewerScreen} />
-                <Stack.Screen name="ConnectionLogs" component={ConnectionLogsScreen} />
-              </Stack.Navigator>
-            </NavigationContainer>
-          </StyledView>
-        </NotificationProvider>
-      </ServerStatusProvider>
+      <KeyboardProvider preserveEdgeToEdge>
+        <ServerStatusProvider>
+          <NotificationProvider>
+            <StyledView className="flex-1 bg-background">
+              <NavigationContainer ref={navigationRef} theme={DarkTheme}>
+                <StatusBar style="light" />
+                <Stack.Navigator
+                  initialRouteName="Servers"
+                  screenOptions={{
+                    headerShown: false,
+                  }}
+                >
+                  <Stack.Screen name="Servers" component={ServersScreen} />
+                  <Stack.Screen name="Projects" component={ProjectsScreen} />
+                  <Stack.Screen name="SelectDirectory" component={SelectDirectoryScreen} />
+                  <Stack.Screen name="Sessions" component={SessionsScreen} />
+                  <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
+                  <Stack.Screen name="AddEditServer" component={AddEditServerScreen} />
+                  <Stack.Screen name="NewSession" component={NewSessionScreen} />
+                  <Stack.Screen name="GitDiffViewer" component={GitDiffViewerScreen} />
+                  <Stack.Screen name="ConnectionLogs" component={ConnectionLogsScreen} />
+                </Stack.Navigator>
+              </NavigationContainer>
+            </StyledView>
+          </NotificationProvider>
+        </ServerStatusProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }
