@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, KeyboardAvoidingView, Platform } from 'react-native';
+import { View } from 'react-native';
+import { KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { Server, Session, SSHConfig, SSHConnectionStatus } from '../../types';
 import { SSHService } from '../../services/ssh';
 import SSHStatusLine from './SSHStatusLine';
@@ -12,6 +14,7 @@ interface TerminalTabProps {
 }
 
 export default function TerminalTab({ session, server }: TerminalTabProps) {
+  const headerHeight = useHeaderHeight();
   const sshRef = useRef<SSHService | null>(null);
 
   const [sshStatus, setSSHStatus] = useState<SSHConnectionStatus>('disconnected');
@@ -120,10 +123,10 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
   }, []);
 
   return (
-    <KeyboardAvoidingView
+    <ControllerKeyboardAvoidingView
       className="flex-1 bg-surface-elevated"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior="translate-with-padding"
+      keyboardVerticalOffset={headerHeight}
     >
       <SSHStatusLine
         status={sshStatus}
@@ -144,6 +147,6 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         onSendCommand={handleSendCommand}
         onClear={handleClear}
       />
-    </KeyboardAvoidingView>
+    </ControllerKeyboardAvoidingView>
   );
 }
