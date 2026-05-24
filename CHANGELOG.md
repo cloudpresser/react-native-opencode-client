@@ -1,3 +1,14 @@
+## [2.14.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.14.2...v2.14.3) (2026-05-24)
+
+
+### Bug Fixes
+
+* align terminal keyboard handling ([fbf21f0](https://github.com/cloudpresser/react-native-opencode-client/commit/fbf21f07f8d70e84ff80e4a23c8ebea3698d23b1))
+* improve chat keyboard handling on android ([eb07f9e](https://github.com/cloudpresser/react-native-opencode-client/commit/eb07f9ee34f494384e164212b6fb5d43581e598e))
+* improve tool call rendering ([5a25300](https://github.com/cloudpresser/react-native-opencode-client/commit/5a25300cb458bcef08841779facd0e28f88208bb))
+* regenerate native projects when stale ([178752f](https://github.com/cloudpresser/react-native-opencode-client/commit/178752fc3d1635d5a6a737f452de9374cfe064f8))
+* support v2 tool parts in chat history ([f32b34a](https://github.com/cloudpresser/react-native-opencode-client/commit/f32b34ae096b3e5857ee223adac0545eb75495fc))
+
 ## [2.14.2](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.14.1...v2.14.2) (2026-05-23)
 
 
