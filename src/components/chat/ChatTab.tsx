@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView as ControllerKeyboardAvoidingView,
 } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -373,6 +374,7 @@ function convertApiMessageToChatMessage(apiMsg: ApiMessage): ChatMessage {
 
 export default function ChatTab({ session, server }: ChatTabProps) {
   const colors = useThemeColors();
+  const headerHeight = useHeaderHeight();
   const { messages, addMessage, setMessages, setViewedSessionId } = useStore();
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -978,7 +980,7 @@ export default function ChatTab({ session, server }: ChatTabProps) {
     <ControllerKeyboardAvoidingView
       className="flex-1 bg-background"
       behavior="translate-with-padding"
-      keyboardVerticalOffset={115}
+      keyboardVerticalOffset={headerHeight}
       testID="chat-tab"
     >
       <FlatList
