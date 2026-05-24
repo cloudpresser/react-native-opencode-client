@@ -1,12 +1,19 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View } from 'react-native';
-import { KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { useHeaderHeight } from '@react-navigation/elements';
+import { KeyboardAvoidingView, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import {
+  RnRussh,
+  type ListenerEvent,
+  type SshConnection,
+  type SshShell,
+} from '@fressh/react-native-uniffi-russh';
+import {
+  XtermJsWebView,
+  type XtermWebViewHandle,
+} from '@fressh/react-native-xtermjs-webview';
 import { Server, Session, SSHConfig, SSHConnectionStatus } from '../../types';
-import { SSHService } from '../../services/ssh';
 import SSHStatusLine from './SSHStatusLine';
 import SSHSettingsPanel from './SSHSettingsPanel';
-import XTerm, { XTermRef } from './XTerm';
 import { useThemeColors } from '../../hooks/useThemeColors';
 
 interface TerminalTabProps {
@@ -14,14 +21,20 @@ interface TerminalTabProps {
   server: Server;
 }
 
+const encoder = new TextEncoder();
+
 export default function TerminalTab({ session, server }: TerminalTabProps) {
-  const headerHeight = useHeaderHeight();
-  const sshRef = useRef<SSHService | null>(null);
-  const xtermRef = useRef<XTermRef | null>(null);
   const colors = useThemeColors();
+  const connectionRef = useRef<SshConnection | null>(null);
+  const shellRef = useRef<SshShell | null>(null);
+  const listenerIdRef = useRef<bigint | null>(null);
+  const xtermRef = useRef<XtermWebViewHandle | null>(null);
 
   const [sshStatus, setSSHStatus] = useState<SSHConnectionStatus>('disconnected');
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [russhReady, setRusshReady] = useState(false);
+  const [viewReady, setViewReady] = useState(false);
+  const [terminalReady, setTerminalReady] = useState(false);
   const [sshConfig, setSSHConfig] = useState<SSHConfig>({
     host: server.host === 'localhost' ? '127.0.0.1' : server.host,
     port: server.sshPort ?? 22,
@@ -31,120 +44,199 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     passphrase: server.sshPassphrase ?? '',
   });
 
-  // Clean up SSH on unmount
   useEffect(() => {
+    let cancelled = false;
+
+    RnRussh.uniffiInitAsync()
+      .then(() => {
+        if (!cancelled) {
+          setRusshReady(true);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setErrorMessage(error instanceof Error ? error.message : String(error));
+          setSSHStatus('error');
+        }
+      });
+
     return () => {
-      sshRef.current?.disconnect();
+      cancelled = true;
     };
   }, []);
 
-  // Track the latest known terminal dimensions
-  const termDimensionsRef = useRef<{ cols: number; rows: number }>({ cols: 80, rows: 24 });
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setTimeout(() => {
+        setViewReady(true);
+      }, 16);
 
-  const handleTerminalData = useCallback((data: string) => {
-    if (sshRef.current?.hasShell) {
-      sshRef.current.write(data);
+      return () => {
+        clearTimeout(timer);
+        setViewReady(false);
+        setTerminalReady(false);
+      };
+    }, []),
+  );
+
+  const cleanupShell = useCallback(async () => {
+    const shell = shellRef.current;
+    if (shell && listenerIdRef.current != null) {
+      try {
+        shell.removeListener(listenerIdRef.current);
+      } catch {}
     }
+    listenerIdRef.current = null;
+
+    if (shell) {
+      try {
+        await shell.close();
+      } catch {}
+    }
+    shellRef.current = null;
+
+    const connection = connectionRef.current;
+    if (connection) {
+      try {
+        await connection.disconnect();
+      } catch {}
+    }
+    connectionRef.current = null;
   }, []);
 
-  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      void cleanupShell();
+      xtermRef.current?.flush();
+    };
+  }, [cleanupShell]);
 
-  const handleTerminalResize = useCallback(({ cols, rows }: { cols: number; rows: number }) => {
-    termDimensionsRef.current = { cols, rows };
-    // Debounce resize commands to avoid flooding the shell during rapid layout changes
-    if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
-    resizeTimerRef.current = setTimeout(() => {
-      if (sshRef.current?.hasShell) {
-        sshRef.current.resizeShell(cols, rows);
+  const attachShellListener = useCallback((shell: SshShell) => {
+    if (listenerIdRef.current != null) {
+      try {
+        shell.removeListener(listenerIdRef.current);
+      } catch {}
+      listenerIdRef.current = null;
+    }
+
+    const replay = shell.readBuffer({ mode: 'head' });
+    if (replay.chunks.length > 0) {
+      xtermRef.current?.writeMany(replay.chunks.map((chunk) => new Uint8Array(chunk.bytes)));
+      xtermRef.current?.flush();
+    }
+
+    const id = shell.addListener((ev: ListenerEvent) => {
+      if ('kind' in ev) {
+        return;
       }
-    }, 150);
+
+      const bytes = new Uint8Array(ev.bytes);
+      xtermRef.current?.write(bytes);
+    }, { cursor: { mode: 'seq', seq: replay.nextSeq } });
+
+    listenerIdRef.current = id;
   }, []);
+
+  useEffect(() => {
+    if (!terminalReady || !shellRef.current) {
+      return;
+    }
+
+    attachShellListener(shellRef.current);
+    xtermRef.current?.focus();
+  }, [attachShellListener, terminalReady]);
 
   const handleConnect = useCallback(async () => {
+    if (!russhReady) {
+      setErrorMessage('Terminal transport is still loading');
+      setSSHStatus('error');
+      return;
+    }
+
     if (!sshConfig.username) {
       setErrorMessage('Username is required');
       setSSHStatus('error');
       return;
     }
 
-    // Disconnect existing session if any
-    if (sshRef.current) {
-      sshRef.current.disconnect();
-      sshRef.current = null;
-    }
-
-    const ssh = new SSHService();
-    sshRef.current = ssh;
-
-    // Wire up callbacks
-    ssh.onStatus = (status) => {
-      setSSHStatus(status);
-      if (status === 'connected') {
-        setErrorMessage(undefined);
-      }
-    };
-
-    ssh.onData = (data) => {
-      xtermRef.current?.write(data);
-    };
-
-    ssh.onError = (error) => {
-      const msg = `\r\n\x1b[31mError: ${error}\x1b[0m\r\n`;
-      xtermRef.current?.write(msg);
-      setErrorMessage(error);
-    };
-
-    ssh.onClose = () => {
-      xtermRef.current?.write('\r\n\x1b[33m--- Connection closed ---\x1b[0m\r\n');
-      setSSHStatus('disconnected');
-    };
+    await cleanupShell();
 
     setSSHStatus('connecting');
     setErrorMessage(undefined);
-    xtermRef.current?.write(`\r\n\x1b[32mConnecting to ${sshConfig.username}@${sshConfig.host}:${sshConfig.port}...\x1b[0m\r\n`);
+    xtermRef.current?.clear();
 
     try {
-      await ssh.connect(sshConfig);
-      xtermRef.current?.write('\r\n\x1b[32mSSH connected. Starting shell...\x1b[0m\r\n');
-      await ssh.startShell();
-      // Let the shell initialize (e.g. .bashrc/.zshrc) before sending setup commands
-      await new Promise((r) => setTimeout(r, 500));
-      // Set TERM=xterm-256color for Ghostty compatibility and sync terminal dimensions
-      const { cols, rows } = termDimensionsRef.current;
-      await ssh.setupTerminal(cols, rows);
-      // Give the clear command time to execute, then reset the local xterm buffer
-      // so the user starts with a pristine terminal showing only the shell prompt
-      setTimeout(() => {
-        xtermRef.current?.clear();
-      }, 300);
-      xtermRef.current?.focus();
+      const security = sshConfig.privateKey
+        ? { type: 'key' as const, privateKey: sshConfig.privateKey }
+        : { type: 'password' as const, password: sshConfig.password || '' };
+
+      const connection = await RnRussh.connect({
+        host: sshConfig.host,
+        port: sshConfig.port,
+        username: sshConfig.username,
+        security,
+        onServerKey: async () => true,
+        onDisconnected: () => {
+          listenerIdRef.current = null;
+          shellRef.current = null;
+          connectionRef.current = null;
+          setSSHStatus('disconnected');
+          xtermRef.current?.write(encoder.encode('\r\n--- Connection closed ---\r\n'));
+        },
+      });
+
+      connectionRef.current = connection;
+      setSSHStatus('connected');
+
+      const shell = await connection.startShell({ term: 'Xterm256' });
+      shellRef.current = shell;
+
+      if (terminalReady) {
+        attachShellListener(shell);
+        xtermRef.current?.focus();
+      }
     } catch (err: any) {
       const msg = err?.message || String(err);
       setErrorMessage(msg);
       setSSHStatus('error');
-      xtermRef.current?.write(`\r\n\x1b[31mConnection failed: ${msg}\x1b[0m\r\n`);
+      xtermRef.current?.write(encoder.encode(`\r\nConnection failed: ${msg}\r\n`));
+      await cleanupShell();
     }
-  }, [sshConfig]);
+  }, [attachShellListener, cleanupShell, russhReady, sshConfig]);
 
-  const handleDisconnect = useCallback(() => {
-    sshRef.current?.disconnect();
-    sshRef.current = null;
+  const handleDisconnect = useCallback(async () => {
+    await cleanupShell();
     setSSHStatus('disconnected');
     setErrorMessage(undefined);
-    xtermRef.current?.write('\r\n\x1b[33m--- Disconnected ---\x1b[0m\r\n');
+    xtermRef.current?.write(encoder.encode('\r\n--- Disconnected ---\r\n'));
+  }, [cleanupShell]);
+
+  const handleTerminalData = useCallback((data: string) => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    void shell.sendData(encoder.encode(data).buffer).catch((error) => {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+      setSSHStatus('error');
+    });
   }, []);
 
+  if (!viewReady) {
+    return <View className="flex-1 bg-surface-elevated" />;
+  }
+
   return (
-    <ControllerKeyboardAvoidingView
+    <KeyboardAvoidingView
       className="flex-1 bg-surface-elevated"
-      behavior="translate-with-padding"
-      keyboardVerticalOffset={headerHeight}
+      behavior="height"
+      keyboardVerticalOffset={120}
+      style={{ gap: 4 }}
     >
       <SSHStatusLine
         status={sshStatus}
         errorMessage={errorMessage}
-        onConnect={handleConnect}
-        onDisconnect={handleDisconnect}
+        onConnect={() => void handleConnect()}
+        onDisconnect={() => void handleDisconnect()}
       />
 
       <SSHSettingsPanel
@@ -153,20 +245,25 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         disabled={sshStatus === 'connecting' || sshStatus === 'connected'}
       />
 
-      <View style={{ flex: 1, backgroundColor: colors.surfaceElevated }}>
-        <XTerm
+      <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surfaceElevated }}>
+        <XtermJsWebView
           ref={xtermRef}
-          dom={{ style: { flex: 1 } }}
-          onData={handleTerminalData}
-          onResize={handleTerminalResize}
-          theme={{
-            background: colors.surfaceElevated,
-            foreground: colors.text,
-            cursor: colors.text,
-            selection: colors.primary + '40', // 40 = 25% opacity
+          style={{ width: '100%', height: '100%' }}
+          xtermOptions={{
+            theme: {
+              background: colors.surfaceElevated,
+              foreground: colors.text,
+            },
           }}
+          onInitialized={() => {
+            setTerminalReady(true);
+            xtermRef.current?.focus();
+            xtermRef.current?.fit();
+          }}
+          onData={handleTerminalData}
+          autoFit
         />
       </View>
-    </ControllerKeyboardAvoidingView>
+    </KeyboardAvoidingView>
   );
 }
