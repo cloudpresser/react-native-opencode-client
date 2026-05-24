@@ -10,9 +10,10 @@ import {
   Alert,
   Modal,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
+import {
+  KeyboardAvoidingView as ControllerKeyboardAvoidingView,
+} from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
 import { withUniwind } from 'uniwind';
 import * as DocumentPicker from 'expo-document-picker';
@@ -974,10 +975,10 @@ export default function ChatTab({ session, server }: ChatTabProps) {
   }
 
   return (
-    <KeyboardAvoidingView
+    <ControllerKeyboardAvoidingView
       className="flex-1 bg-background"
-      behavior="padding"
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 120}
+      behavior="translate-with-padding"
+      keyboardVerticalOffset={115}
       testID="chat-tab"
     >
       <FlatList
@@ -1113,6 +1114,6 @@ export default function ChatTab({ session, server }: ChatTabProps) {
           </View>
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
+    </ControllerKeyboardAvoidingView>
   );
 }
