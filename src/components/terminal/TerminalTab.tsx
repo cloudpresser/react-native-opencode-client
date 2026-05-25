@@ -487,7 +487,7 @@ function KeyboardToolbarButton({
         },
         style,
       ]}
-      onPress={() => {
+      onPressIn={() => {
         if (props.type === 'modifier') {
           onToggleModifier(props);
           return;
