@@ -1,6 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { KeyboardAvoidingView, View } from 'react-native';
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import {
   RnRussh,
   type ListenerEvent,
@@ -22,9 +25,92 @@ interface TerminalTabProps {
 }
 
 const encoder = new TextEncoder();
+const escapeByte = 27;
+
+type KeyboardToolbarModifierButtonProps = {
+  type: 'modifier';
+  label: string;
+  orderPreference: number;
+  canApplyModifierToBytes: (bytes: Uint8Array<ArrayBuffer>) => boolean;
+  applyModifierToBytes: (bytes: Uint8Array<ArrayBuffer>) => Uint8Array<ArrayBuffer>;
+};
+
+type KeyboardToolbarInstantButtonProps = {
+  type?: 'sendBytes';
+  label?: string;
+  iconName?: keyof typeof Ionicons.glyphMap;
+  sendBytes: Uint8Array<ArrayBuffer>;
+};
+
+type KeyboardToolbarButtonProps = KeyboardToolbarModifierButtonProps | KeyboardToolbarInstantButtonProps;
+
+function mapByteToCtrl(byte: number): number | null {
+  if (byte === 32) return 0;
+  const uppercase = byte & 0b1101_1111;
+  if (uppercase >= 64 && uppercase <= 95) {
+    return uppercase & 0x1f;
+  }
+  if (byte === 63) return 127;
+  return null;
+}
+
+const ctrlModifier: KeyboardToolbarModifierButtonProps = {
+  type: 'modifier',
+  label: 'CTRL',
+  orderPreference: 10,
+  canApplyModifierToBytes: (bytes) => {
+    const firstByte = bytes[0];
+    if (firstByte === undefined) return false;
+    return mapByteToCtrl(firstByte) != null;
+  },
+  applyModifierToBytes: (bytes) => {
+    const firstByte = bytes[0];
+    if (firstByte === undefined) return bytes;
+    const ctrlByte = mapByteToCtrl(firstByte);
+    if (ctrlByte == null) return bytes;
+    return new Uint8Array([ctrlByte]);
+  },
+};
+
+const altModifier: KeyboardToolbarModifierButtonProps = {
+  type: 'modifier',
+  label: 'ALT',
+  orderPreference: 20,
+  canApplyModifierToBytes: (bytes) => bytes.length > 0 && bytes[0] !== escapeByte,
+  applyModifierToBytes: (bytes) => {
+    const result = new Uint8Array(bytes.length + 1);
+    result[0] = escapeByte;
+    result.set(bytes, 1);
+    return result;
+  },
+};
+
+const keyboardToolbarButtonPresetToProps: Record<string, KeyboardToolbarButtonProps> = {
+  esc: { label: 'ESC', sendBytes: new Uint8Array([27]) },
+  '/': { label: '/', sendBytes: new Uint8Array([47]) },
+  '|': { label: '|', sendBytes: new Uint8Array([124]) },
+  home: { label: 'HOME', sendBytes: new Uint8Array([27, 91, 72]) },
+  end: { label: 'END', sendBytes: new Uint8Array([27, 91, 70]) },
+  pgup: { label: 'PGUP', sendBytes: new Uint8Array([27, 91, 53, 126]) },
+  pgdn: { label: 'PGDN', sendBytes: new Uint8Array([27, 91, 54, 126]) },
+  tab: { label: 'TAB', sendBytes: new Uint8Array([9]) },
+  left: { iconName: 'arrow-back', sendBytes: new Uint8Array([27, 91, 68]) },
+  up: { iconName: 'arrow-up', sendBytes: new Uint8Array([27, 91, 65]) },
+  down: { iconName: 'arrow-down', sendBytes: new Uint8Array([27, 91, 66]) },
+  right: { iconName: 'arrow-forward', sendBytes: new Uint8Array([27, 91, 67]) },
+  ctrl: ctrlModifier,
+  alt: altModifier,
+};
+
+function propsToKey(props: KeyboardToolbarButtonProps) {
+  if ('label' in props && props.label) return props.label;
+  if ('iconName' in props && props.iconName) return props.iconName;
+  return 'key';
+}
 
 export default function TerminalTab({ session, server }: TerminalTabProps) {
   const colors = useThemeColors();
+  const headerHeight = useHeaderHeight();
   const connectionRef = useRef<SshConnection | null>(null);
   const shellRef = useRef<SshShell | null>(null);
   const listenerIdRef = useRef<bigint | null>(null);
@@ -35,6 +121,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
   const [russhReady, setRusshReady] = useState(false);
   const [viewReady, setViewReady] = useState(false);
   const [terminalReady, setTerminalReady] = useState(false);
+  const modifierKeysRef = useRef<KeyboardToolbarModifierButtonProps[]>([]);
   const [sshConfig, setSSHConfig] = useState<SSHConfig>({
     host: server.host === 'localhost' ? '127.0.0.1' : server.host,
     port: server.sshPort ?? 22,
@@ -211,25 +298,40 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     xtermRef.current?.write(encoder.encode('\r\n--- Disconnected ---\r\n'));
   }, [cleanupShell]);
 
-  const handleTerminalData = useCallback((data: string) => {
+  const sendBytes = useCallback((input: Uint8Array<ArrayBuffer>) => {
     const shell = shellRef.current;
     if (!shell) return;
 
-    void shell.sendData(encoder.encode(data).buffer).catch((error) => {
+    let bytes = new Uint8Array(input);
+    modifierKeysRef.current
+      .slice()
+      .sort((a, b) => a.orderPreference - b.orderPreference)
+      .forEach((modifier) => {
+        if (!modifier.canApplyModifierToBytes(bytes)) {
+          return;
+        }
+        bytes = modifier.applyModifierToBytes(bytes);
+      });
+
+    void shell.sendData(bytes.buffer).catch((error) => {
       setErrorMessage(error instanceof Error ? error.message : String(error));
       setSSHStatus('error');
     });
   }, []);
+
+  const handleTerminalData = useCallback((data: string) => {
+    sendBytes(encoder.encode(data));
+  }, [sendBytes]);
 
   if (!viewReady) {
     return <View className="flex-1 bg-surface-elevated" />;
   }
 
   return (
-    <KeyboardAvoidingView
+    <ControllerKeyboardAvoidingView
       className="flex-1 bg-surface-elevated"
-      behavior="height"
-      keyboardVerticalOffset={120}
+      behavior="translate-with-padding"
+      keyboardVerticalOffset={headerHeight}
       style={{ gap: 4 }}
     >
       <SSHStatusLine
@@ -264,6 +366,130 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
           autoFit
         />
       </View>
-    </KeyboardAvoidingView>
+
+      <KeyboardToolbar
+        colors={colors}
+        modifierKeysRef={modifierKeysRef}
+        sendBytes={sendBytes}
+      />
+    </ControllerKeyboardAvoidingView>
+  );
+}
+
+function KeyboardToolbar({
+  colors,
+  modifierKeysRef,
+  sendBytes,
+}: {
+  colors: ReturnType<typeof useThemeColors>;
+  modifierKeysRef: React.MutableRefObject<KeyboardToolbarModifierButtonProps[]>;
+  sendBytes: (bytes: Uint8Array<ArrayBuffer>) => void;
+}) {
+  const [activeModifiers, setActiveModifiers] = useState<KeyboardToolbarModifierButtonProps[]>([]);
+
+  const handleSetActiveModifiers = useCallback(
+    (updater: React.SetStateAction<KeyboardToolbarModifierButtonProps[]>) => {
+      setActiveModifiers((current) => {
+        const next = typeof updater === 'function' ? updater(current) : updater;
+        modifierKeysRef.current = next;
+        return next;
+      });
+    },
+    [modifierKeysRef],
+  );
+
+  return (
+    <View
+      style={{
+        height: 96,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        backgroundColor: colors.surface,
+      }}
+    >
+      <KeyboardToolbarRow>
+        <KeyboardToolbarButton preset="esc" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="/" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="|" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="home" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="up" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="end" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="pgup" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+      </KeyboardToolbarRow>
+      <KeyboardToolbarRow>
+        <KeyboardToolbarButton preset="tab" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="ctrl" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="alt" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="left" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="down" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="right" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="pgdn" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+      </KeyboardToolbarRow>
+    </View>
+  );
+}
+
+function KeyboardToolbarRow({ children }: { children?: React.ReactNode }) {
+  return <View style={{ flexDirection: 'row', flex: 1 }}>{children}</View>;
+}
+
+function KeyboardToolbarButton({
+  preset,
+  colors,
+  activeModifiers,
+  setActiveModifiers,
+  sendBytes,
+  style,
+}: {
+  preset: string;
+  colors: ReturnType<typeof useThemeColors>;
+  activeModifiers: KeyboardToolbarModifierButtonProps[];
+  setActiveModifiers: React.Dispatch<React.SetStateAction<KeyboardToolbarModifierButtonProps[]>>;
+  sendBytes: (bytes: Uint8Array<ArrayBuffer>) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const props = keyboardToolbarButtonPresetToProps[preset];
+  const key = propsToKey(props);
+  const modifierActive = props.type === 'modifier' && activeModifiers.some((item) => propsToKey(item) === key);
+
+  return (
+    <Pressable
+      style={[
+        {
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRightWidth: 1,
+          borderBottomWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: modifierActive ? colors.primary : colors.surface,
+        },
+        style,
+      ]}
+      onPress={() => {
+        if (props.type === 'modifier') {
+          setActiveModifiers((current) =>
+            current.some((item) => propsToKey(item) === key)
+              ? current.filter((item) => propsToKey(item) !== key)
+              : [...current, props],
+          );
+          return;
+        }
+
+        sendBytes(new Uint8Array(props.sendBytes));
+      }}
+    >
+      {'label' in props && props.label ? (
+        <Text style={{ color: modifierActive ? colors.onPrimary : colors.text, fontSize: 12, fontWeight: '600' }}>
+          {props.label}
+        </Text>
+      ) : 'iconName' in props && props.iconName ? (
+        <Ionicons
+          name={props.iconName}
+          size={18}
+          color={modifierActive ? colors.onPrimary : colors.text}
+        />
+      ) : null}
+    </Pressable>
   );
 }
