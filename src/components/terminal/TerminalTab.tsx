@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -115,6 +115,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
   const shellRef = useRef<SshShell | null>(null);
   const listenerIdRef = useRef<bigint | null>(null);
   const xtermRef = useRef<XtermWebViewHandle | null>(null);
+  const terminalLayoutRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
   const [sshStatus, setSSHStatus] = useState<SSHConnectionStatus>('disconnected');
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -323,6 +324,23 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     sendBytes(encoder.encode(data));
   }, [sendBytes]);
 
+  const handleTerminalLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    const nextWidth = Math.round(width);
+    const nextHeight = Math.round(height);
+    const previous = terminalLayoutRef.current;
+
+    if (previous.width === nextWidth && previous.height === nextHeight) {
+      return;
+    }
+
+    terminalLayoutRef.current = { width: nextWidth, height: nextHeight };
+
+    requestAnimationFrame(() => {
+      xtermRef.current?.fit();
+    });
+  }, []);
+
   if (!viewReady) {
     return <View className="flex-1 bg-surface-elevated" />;
   }
@@ -347,7 +365,10 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         disabled={sshStatus === 'connecting' || sshStatus === 'connected'}
       />
 
-      <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.surfaceElevated }}>
+      <View
+        style={{ flex: 1, minHeight: 0, backgroundColor: colors.surfaceElevated }}
+        onLayout={handleTerminalLayout}
+      >
         <XtermJsWebView
           ref={xtermRef}
           style={{ width: '100%', height: '100%' }}
