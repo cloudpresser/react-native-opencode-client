@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { memo, useState, useRef, useCallback, useEffect } from 'react';
 import { Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
@@ -122,7 +122,8 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
   const [russhReady, setRusshReady] = useState(false);
   const [viewReady, setViewReady] = useState(false);
   const [terminalReady, setTerminalReady] = useState(false);
-  const modifierKeysRef = useRef<KeyboardToolbarModifierButtonProps[]>([]);
+  const [modifierKeysActive, setModifierKeysActive] = useState<KeyboardToolbarModifierButtonProps[]>([]);
+  const sendBytesRef = useRef<(bytes: Uint8Array<ArrayBuffer>) => void>(() => {});
   const [sshConfig, setSSHConfig] = useState<SSHConfig>({
     host: server.host === 'localhost' ? '127.0.0.1' : server.host,
     port: server.sshPort ?? 22,
@@ -304,7 +305,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     if (!shell) return;
 
     let bytes = new Uint8Array(input);
-    modifierKeysRef.current
+    modifierKeysActive
       .slice()
       .sort((a, b) => a.orderPreference - b.orderPreference)
       .forEach((modifier) => {
@@ -318,11 +319,15 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       setErrorMessage(error instanceof Error ? error.message : String(error));
       setSSHStatus('error');
     });
-  }, []);
+  }, [modifierKeysActive]);
+
+  useEffect(() => {
+    sendBytesRef.current = sendBytes;
+  }, [sendBytes]);
 
   const handleTerminalData = useCallback((data: string) => {
-    sendBytes(encoder.encode(data));
-  }, [sendBytes]);
+    sendBytesRef.current(encoder.encode(data));
+  }, []);
 
   const handleTerminalLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -339,6 +344,12 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     requestAnimationFrame(() => {
       xtermRef.current?.fit();
     });
+  }, []);
+
+  const handleTerminalInitialized = useCallback(() => {
+    setTerminalReady(true);
+    xtermRef.current?.focus();
+    xtermRef.current?.fit();
   }, []);
 
   if (!viewReady) {
@@ -365,32 +376,18 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         disabled={sshStatus === 'connecting' || sshStatus === 'connected'}
       />
 
-      <View
-        style={{ flex: 1, minHeight: 0, backgroundColor: colors.surfaceElevated }}
+      <TerminalViewport
+        colors={colors}
+        xtermRef={xtermRef}
         onLayout={handleTerminalLayout}
-      >
-        <XtermJsWebView
-          ref={xtermRef}
-          style={{ width: '100%', height: '100%' }}
-          xtermOptions={{
-            theme: {
-              background: colors.surfaceElevated,
-              foreground: colors.text,
-            },
-          }}
-          onInitialized={() => {
-            setTerminalReady(true);
-            xtermRef.current?.focus();
-            xtermRef.current?.fit();
-          }}
-          onData={handleTerminalData}
-          autoFit
-        />
-      </View>
+        onInitialized={handleTerminalInitialized}
+        onData={handleTerminalData}
+      />
 
       <KeyboardToolbar
         colors={colors}
-        modifierKeysRef={modifierKeysRef}
+        activeModifiers={modifierKeysActive}
+        setActiveModifiers={setModifierKeysActive}
         sendBytes={sendBytes}
       />
     </ControllerKeyboardAvoidingView>
@@ -399,25 +396,23 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
 
 function KeyboardToolbar({
   colors,
-  modifierKeysRef,
+  activeModifiers,
+  setActiveModifiers,
   sendBytes,
 }: {
   colors: ReturnType<typeof useThemeColors>;
-  modifierKeysRef: React.MutableRefObject<KeyboardToolbarModifierButtonProps[]>;
+  activeModifiers: KeyboardToolbarModifierButtonProps[];
+  setActiveModifiers: React.Dispatch<React.SetStateAction<KeyboardToolbarModifierButtonProps[]>>;
   sendBytes: (bytes: Uint8Array<ArrayBuffer>) => void;
 }) {
-  const [activeModifiers, setActiveModifiers] = useState<KeyboardToolbarModifierButtonProps[]>([]);
-
   const handleToggleModifier = useCallback((modifier: KeyboardToolbarModifierButtonProps) => {
     const key = propsToKey(modifier);
-    const current = modifierKeysRef.current;
-    const next = current.some((item) => propsToKey(item) === key)
-      ? current.filter((item) => propsToKey(item) !== key)
-      : [...current, modifier];
-
-    modifierKeysRef.current = next;
-    setActiveModifiers(next);
-  }, [modifierKeysRef]);
+    setActiveModifiers((current) =>
+      current.some((item) => propsToKey(item) === key)
+        ? current.filter((item) => propsToKey(item) !== key)
+        : [...current, modifier],
+    );
+  }, [setActiveModifiers]);
 
   return (
     <View
@@ -449,6 +444,41 @@ function KeyboardToolbar({
     </View>
   );
 }
+
+const TerminalViewport = memo(function TerminalViewport({
+  colors,
+  xtermRef,
+  onLayout,
+  onInitialized,
+  onData,
+}: {
+  colors: ReturnType<typeof useThemeColors>;
+  xtermRef: React.RefObject<XtermWebViewHandle | null>;
+  onLayout: (event: LayoutChangeEvent) => void;
+  onInitialized: () => void;
+  onData: (data: string) => void;
+}) {
+  return (
+    <View
+      style={{ flex: 1, minHeight: 0, backgroundColor: colors.surfaceElevated }}
+      onLayout={onLayout}
+    >
+      <XtermJsWebView
+        ref={xtermRef}
+        style={{ width: '100%', height: '100%' }}
+        xtermOptions={{
+          theme: {
+            background: colors.surfaceElevated,
+            foreground: colors.text,
+          },
+        }}
+        onInitialized={onInitialized}
+        onData={onData}
+        autoFit
+      />
+    </View>
+  );
+});
 
 function KeyboardToolbarRow({ children }: { children?: React.ReactNode }) {
   return <View style={{ flexDirection: 'row', flex: 1 }}>{children}</View>;
