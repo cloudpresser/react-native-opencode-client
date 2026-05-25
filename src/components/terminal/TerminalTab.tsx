@@ -129,7 +129,6 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
   const [viewReady, setViewReady] = useState(false);
   const [terminalReady, setTerminalReady] = useState(false);
   const [modifierKeysActive, setModifierKeysActive] = useState<KeyboardToolbarModifierButtonProps[]>([]);
-  const sendBytesRef = useRef<(bytes: Uint8Array<ArrayBuffer>) => void>(() => {});
   const [sshConfig, setSSHConfig] = useState<SSHConfig>({
     host: server.host === 'localhost' ? '127.0.0.1' : server.host,
     port: server.sshPort ?? 22,
@@ -325,27 +324,11 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       setErrorMessage(error instanceof Error ? error.message : String(error));
       setSSHStatus('error');
     });
-
-    requestAnimationFrame(() => {
-      xtermRef.current?.focus();
-    });
   }, [modifierKeysActive]);
 
-  const focusTerminal = useCallback(() => {
-    xtermRef.current?.focus();
-    requestAnimationFrame(() => {
-      xtermRef.current?.focus();
-    });
-    setTimeout(() => {
-      xtermRef.current?.focus();
-    }, 32);
-  }, []);
-  sendBytesRef.current = sendBytes;
-
   const handleTerminalData = useCallback((data: string) => {
-    sendBytesRef.current(encoder.encode(data));
-    focusTerminal();
-  }, [focusTerminal]);
+    sendBytes(encoder.encode(data));
+  }, [sendBytes]);
 
   const handleTerminalLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -408,7 +391,6 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         activeModifiers={modifierKeysActive}
         setActiveModifiers={setModifierKeysActive}
         sendBytes={sendBytes}
-        focusTerminal={focusTerminal}
       />
     </ControllerKeyboardAvoidingView>
   );
@@ -419,13 +401,11 @@ function KeyboardToolbar({
   activeModifiers,
   setActiveModifiers,
   sendBytes,
-  focusTerminal,
 }: {
   colors: ReturnType<typeof useThemeColors>;
   activeModifiers: KeyboardToolbarModifierButtonProps[];
   setActiveModifiers: React.Dispatch<React.SetStateAction<KeyboardToolbarModifierButtonProps[]>>;
   sendBytes: (bytes: Uint8Array<ArrayBuffer>) => void;
-  focusTerminal: () => void;
 }) {
   const handleToggleModifier = useCallback((modifier: KeyboardToolbarModifierButtonProps) => {
     const key = propsToKey(modifier);
@@ -434,8 +414,7 @@ function KeyboardToolbar({
         ? current.filter((item) => propsToKey(item) !== key)
         : [...current, modifier],
     );
-    focusTerminal();
-  }, [focusTerminal, setActiveModifiers]);
+  }, [setActiveModifiers]);
 
   return (
     <View
@@ -540,7 +519,7 @@ function KeyboardToolbarButton({
         },
         style,
       ]}
-      onPressIn={() => {
+      onPress={() => {
         if (props.type === 'modifier') {
           onToggleModifier(props);
           return;
