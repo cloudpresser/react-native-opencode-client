@@ -26,6 +26,7 @@ interface TerminalTabProps {
 
 const encoder = new TextEncoder();
 const escapeByte = 27;
+const defaultTerminalPtySize = { cols: 80, rows: 24 };
 
 type KeyboardToolbarModifierButtonProps = {
   type: 'modifier';
@@ -236,6 +237,18 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     xtermRef.current?.focus();
   }, []);
 
+  const getTerminalPtySize = useCallback(async () => {
+    const size = await xtermRef.current?.getSize();
+    if (!size) {
+      return defaultTerminalPtySize;
+    }
+
+    return {
+      cols: Math.max(2, Math.round(size.cols)),
+      rows: Math.max(1, Math.round(size.rows)),
+    };
+  }, []);
+
   useEffect(() => {
     if (!terminalReady || !shellRef.current) {
       return;
@@ -253,6 +266,12 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       return;
     }
 
+    if (!terminalReady) {
+      setErrorMessage('Terminal is still initializing');
+      setSSHStatus('error');
+      return;
+    }
+
     if (!sshConfig.username) {
       setErrorMessage('Username is required');
       setSSHStatus('error');
@@ -266,6 +285,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     xtermRef.current?.clear();
 
     try {
+      const terminalSize = await getTerminalPtySize();
       const security = sshConfig.privateKey
         ? { type: 'key' as const, privateKey: sshConfig.privateKey }
         : { type: 'password' as const, password: sshConfig.password || '' };
@@ -286,10 +306,16 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       });
 
       connectionRef.current = connection;
-      setSSHStatus('connected');
 
-      const shell = await connection.startShell({ term: 'Xterm256' });
+      const shell = await connection.startShell({
+        term: 'Xterm256',
+        terminalSize: {
+          colWidth: terminalSize.cols,
+          rowHeight: terminalSize.rows,
+        },
+      });
       shellRef.current = shell;
+      setSSHStatus('connected');
 
       if (terminalReady) {
         attachShellListener(shell);
@@ -302,7 +328,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       xtermRef.current?.write(encoder.encode(`\r\nConnection failed: ${msg}\r\n`));
       await cleanupShell();
     }
-  }, [attachShellListener, cleanupShell, focusTerminalInput, russhReady, sshConfig]);
+  }, [attachShellListener, cleanupShell, focusTerminalInput, getTerminalPtySize, russhReady, sshConfig, terminalReady]);
 
   const handleDisconnect = useCallback(async () => {
     await cleanupShell();
