@@ -1,20 +1,38 @@
 diff --git a/node_modules/@fressh/react-native-xtermjs-webview/dist/index.d.ts b/node_modules/@fressh/react-native-xtermjs-webview/dist/index.d.ts
-index f7337ec..d939a91 100644
+index f7337ec..c8a237a 100644
 --- a/node_modules/@fressh/react-native-xtermjs-webview/dist/index.d.ts
 +++ b/node_modules/@fressh/react-native-xtermjs-webview/dist/index.d.ts
-@@ -23,6 +23,7 @@ export type XtermWebViewHandle = {
+@@ -23,6 +23,11 @@ export type XtermWebViewHandle = {
      flush: () => void;
      clear: () => void;
      focus: () => void;
 +    setSystemKeyboardEnabled: (enabled: boolean) => void;
++    getSize: () => Promise<{
++        cols: number;
++        rows: number;
++    } | null>;
      resize: (size: {
          cols: number;
          rows: number;
 diff --git a/node_modules/@fressh/react-native-xtermjs-webview/dist/index.js b/node_modules/@fressh/react-native-xtermjs-webview/dist/index.js
-index 2632d2d..197ac11 100644
+index 2632d2d..f0505bf 100644
 --- a/node_modules/@fressh/react-native-xtermjs-webview/dist/index.js
 +++ b/node_modules/@fressh/react-native-xtermjs-webview/dist/index.js
-@@ -101,7 +101,26 @@ function se({
+@@ -65,7 +65,7 @@ function se({
+       s.injectJavaScript(_);
+     },
+     [e]
+-  ), h = S(null), c = S(null), p = a(() => {
++  ), h = S(null), c = S(null), Q = S(0), Z = S(/* @__PURE__ */ new Map()), p = a(() => {
+     if (!h.current) return;
+     const t = I(h.current);
+     h.current = null, c.current != null && (cancelAnimationFrame(c.current), c.current = null), n({ type: "write", bStr: t });
+@@ -97,11 +97,53 @@ function se({
+     [p, n]
+   );
+   L(() => () => {
+-    c.current != null && cancelAnimationFrame(c.current), c.current = null, h.current = null;
++    c.current != null && cancelAnimationFrame(c.current), c.current = null, h.current = null, Z.current.clear();
    }, []);
    const E = a(() => {
      n({ type: "fit" });
@@ -38,31 +56,101 @@ index 2632d2d..197ac11 100644
 +  return true;
 +})();`;
 +    s.injectJavaScript(r), t && s.requestFocus();
++  }, []), ee = a(() => {
++    const t = y.current;
++    if (!t)
++      return Promise.resolve(null);
++    const s = Q.current + 1;
++    Q.current = s;
++    return new Promise((r) => {
++      Z.current.set(s, { resolve: r });
++      const _ = `
++(() => {
++  const term = window.terminal;
++  window.ReactNativeWebView?.postMessage?.(JSON.stringify({
++    type: 'terminalSize',
++    requestId: ${s},
++    cols: Number(term?.cols ?? 0),
++    rows: Number(term?.rows ?? 0),
++  }));
++  return true;
++})();`;
++      t.injectJavaScript(_), setTimeout(() => {
++        Z.current.has(s) && (Z.current.delete(s), r(null));
++      }, 1e3);
++    });
 +  }, []), g = a(() => {
      D && E();
    }, [D, E]), k = S(null);
    L(() => {
-@@ -118,6 +137,7 @@ function se({
+@@ -118,6 +160,8 @@ function se({
        var t;
        n({ type: "focus" }), (t = y.current) == null || t.requestFocus();
      },
 +    setSystemKeyboardEnabled: H,
++    getSize: ee,
      resize: (t) => {
        n({ type: "resize", cols: t.cols, rows: t.rows }), g(), k.current = t;
      },
+@@ -149,6 +193,13 @@ function se({
+           b == null || b(u.str);
+           return;
+         }
++        if (u.type === "terminalSize") {
++          const T = Z.current.get(u.requestId);
++          if (!T)
++            return;
++          Z.current.delete(u.requestId), T.resolve(u.cols >= 2 && u.rows >= 1 ? { cols: u.cols, rows: u.rows } : null);
++          return;
++        }
+         if (u.type === "debug") {
+           (r = e == null ? void 0 : e.log) == null || r.call(e, "received debug msg from webview: ", u.message);
+           return;
+diff --git a/node_modules/@fressh/react-native-xtermjs-webview/src/bridge.ts b/node_modules/@fressh/react-native-xtermjs-webview/src/bridge.ts
+index 3265dfd..c0f4f7e 100644
+--- a/node_modules/@fressh/react-native-xtermjs-webview/src/bridge.ts
++++ b/node_modules/@fressh/react-native-xtermjs-webview/src/bridge.ts
+@@ -5,6 +5,7 @@ type ITerminalInitOnlyOptions = import('@xterm/xterm').ITerminalInitOnlyOptions;
+ export type BridgeInboundMessage =
+ 	| { type: 'initialized' }
+ 	| { type: 'input'; str: string }
++	| { type: 'terminalSize'; requestId: number; cols: number; rows: number }
+ 	| { type: 'debug'; message: string };
+ 
+ // Messages injected from React Native into the WebView (xterm page)
 diff --git a/node_modules/@fressh/react-native-xtermjs-webview/src/index.tsx b/node_modules/@fressh/react-native-xtermjs-webview/src/index.tsx
-index ea50f33..d6755d5 100644
+index ea50f33..0c26cf6 100644
 --- a/node_modules/@fressh/react-native-xtermjs-webview/src/index.tsx
 +++ b/node_modules/@fressh/react-native-xtermjs-webview/src/index.tsx
-@@ -38,6 +38,7 @@ export type XtermWebViewHandle = {
+@@ -38,6 +38,8 @@ export type XtermWebViewHandle = {
  	flush: () => void; // force-flush outgoing writes
  	clear: () => void;
  	focus: () => void;
 +	setSystemKeyboardEnabled: (enabled: boolean) => void;
++	getSize: () => Promise<{ cols: number; rows: number } | null>;
  	resize: (size: { cols: number; rows: number }) => void;
  	fit: () => void;
  };
-@@ -207,6 +208,30 @@ export function XtermJsWebView({
+@@ -129,6 +131,10 @@ export function XtermJsWebView({
+ }: XtermJsWebViewProps) {
+ 	const webRef = useRef<WebView>(null);
+ 	const [initialized, setInitialized] = useState(false);
++	const sizeRequestIdRef = useRef(0);
++	const pendingSizeRequestsRef = useRef(
++		new Map<number, { resolve: (value: { cols: number; rows: number } | null) => void }>(),
++	);
+ 
+ 	// ---- RN -> WebView message sender
+ 	const sendToWebView = useCallback(
+@@ -200,6 +206,7 @@ export function XtermJsWebView({
+ 			if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+ 			rafRef.current = null;
+ 			bufRef.current = null;
++			pendingSizeRequestsRef.current.clear();
+ 		};
+ 	}, []);
+ 
+@@ -207,6 +214,59 @@ export function XtermJsWebView({
  		sendToWebView({ type: 'fit' });
  	}, [sendToWebView]);
  
@@ -90,14 +178,62 @@ index ea50f33..d6755d5 100644
 +		}
 +	}, []);
 +
++	const getSize = useCallback((): Promise<{ cols: number; rows: number } | null> => {
++		const webViewRef = webRef.current;
++		if (!webViewRef) return Promise.resolve(null);
++
++		const requestId = sizeRequestIdRef.current + 1;
++		sizeRequestIdRef.current = requestId;
++
++		return new Promise((resolve) => {
++			pendingSizeRequestsRef.current.set(requestId, { resolve });
++			const js = `
++(() => {
++	const term = window.terminal;
++	window.ReactNativeWebView?.postMessage?.(JSON.stringify({
++		type: 'terminalSize',
++		requestId: ${requestId},
++		cols: Number(term?.cols ?? 0),
++		rows: Number(term?.rows ?? 0),
++	}));
++	return true;
++})();`;
++			webViewRef.injectJavaScript(js);
++			setTimeout(() => {
++				if (!pendingSizeRequestsRef.current.has(requestId)) return;
++				pendingSizeRequestsRef.current.delete(requestId);
++				resolve(null);
++			}, 1000);
++		});
++	}, []);
++
  	const autoFitFn = useCallback(() => {
  		if (!autoFit) return;
  		fit();
-@@ -237,6 +262,7 @@ export function XtermJsWebView({
+@@ -237,6 +297,8 @@ export function XtermJsWebView({
  			sendToWebView({ type: 'focus' });
  			webRef.current?.requestFocus();
  		},
 +		setSystemKeyboardEnabled,
++		getSize,
  		resize: (size: { cols: number; rows: number }) => {
  			sendToWebView({ type: 'resize', cols: size.cols, rows: size.rows });
  			autoFitFn();
+@@ -283,6 +345,17 @@ export function XtermJsWebView({
+ 					onData?.(msg.str);
+ 					return;
+ 				}
++				if (msg.type === 'terminalSize') {
++					const pending = pendingSizeRequestsRef.current.get(msg.requestId);
++					if (!pending) return;
++					pendingSizeRequestsRef.current.delete(msg.requestId);
++					pending.resolve(
++						msg.cols >= 2 && msg.rows >= 1
++							? { cols: msg.cols, rows: msg.rows }
++							: null,
++					);
++					return;
++				}
+ 				if (msg.type === 'debug') {
+ 					logger?.log?.(`received debug msg from webview: `, msg.message);
+ 					return;
