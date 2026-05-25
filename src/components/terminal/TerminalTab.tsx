@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { memo, useState, useRef, useCallback, useEffect } from 'react';
-import { Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -178,14 +178,14 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     if (shell && listenerIdRef.current != null) {
       try {
         shell.removeListener(listenerIdRef.current);
-      } catch {}
+      } catch { }
     }
     listenerIdRef.current = null;
 
     if (shell) {
       try {
         await shell.close();
-      } catch {}
+      } catch { }
     }
     shellRef.current = null;
 
@@ -193,7 +193,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     if (connection) {
       try {
         await connection.disconnect();
-      } catch {}
+      } catch { }
     }
     connectionRef.current = null;
   }, []);
@@ -209,7 +209,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     if (listenerIdRef.current != null) {
       try {
         shell.removeListener(listenerIdRef.current);
-      } catch {}
+      } catch { }
       listenerIdRef.current = null;
     }
 
@@ -320,6 +320,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         bytes = modifier.applyModifierToBytes(bytes);
       });
 
+    Alert.alert("bytes:", bytes.toString())
     void shell.sendData(bytes.buffer).catch((error) => {
       setErrorMessage(error instanceof Error ? error.message : String(error));
       setSSHStatus('error');
