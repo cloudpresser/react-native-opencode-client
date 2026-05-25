@@ -408,16 +408,16 @@ function KeyboardToolbar({
 }) {
   const [activeModifiers, setActiveModifiers] = useState<KeyboardToolbarModifierButtonProps[]>([]);
 
-  const handleSetActiveModifiers = useCallback(
-    (updater: React.SetStateAction<KeyboardToolbarModifierButtonProps[]>) => {
-      setActiveModifiers((current) => {
-        const next = typeof updater === 'function' ? updater(current) : updater;
-        modifierKeysRef.current = next;
-        return next;
-      });
-    },
-    [modifierKeysRef],
-  );
+  const handleToggleModifier = useCallback((modifier: KeyboardToolbarModifierButtonProps) => {
+    const key = propsToKey(modifier);
+    const current = modifierKeysRef.current;
+    const next = current.some((item) => propsToKey(item) === key)
+      ? current.filter((item) => propsToKey(item) !== key)
+      : [...current, modifier];
+
+    modifierKeysRef.current = next;
+    setActiveModifiers(next);
+  }, [modifierKeysRef]);
 
   return (
     <View
@@ -429,22 +429,22 @@ function KeyboardToolbar({
       }}
     >
       <KeyboardToolbarRow>
-        <KeyboardToolbarButton preset="esc" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="/" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="|" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="home" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="up" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="end" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="pgup" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="esc" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="/" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="|" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="home" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="up" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="end" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="pgup" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
       </KeyboardToolbarRow>
       <KeyboardToolbarRow>
-        <KeyboardToolbarButton preset="tab" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="ctrl" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="alt" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="left" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="down" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="right" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
-        <KeyboardToolbarButton preset="pgdn" colors={colors} activeModifiers={activeModifiers} setActiveModifiers={handleSetActiveModifiers} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="tab" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="ctrl" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="alt" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="left" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="down" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="right" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
+        <KeyboardToolbarButton preset="pgdn" colors={colors} activeModifiers={activeModifiers} onToggleModifier={handleToggleModifier} sendBytes={sendBytes} />
       </KeyboardToolbarRow>
     </View>
   );
@@ -458,14 +458,14 @@ function KeyboardToolbarButton({
   preset,
   colors,
   activeModifiers,
-  setActiveModifiers,
+  onToggleModifier,
   sendBytes,
   style,
 }: {
   preset: string;
   colors: ReturnType<typeof useThemeColors>;
   activeModifiers: KeyboardToolbarModifierButtonProps[];
-  setActiveModifiers: React.Dispatch<React.SetStateAction<KeyboardToolbarModifierButtonProps[]>>;
+  onToggleModifier: (modifier: KeyboardToolbarModifierButtonProps) => void;
   sendBytes: (bytes: Uint8Array<ArrayBuffer>) => void;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -489,11 +489,7 @@ function KeyboardToolbarButton({
       ]}
       onPress={() => {
         if (props.type === 'modifier') {
-          setActiveModifiers((current) =>
-            current.some((item) => propsToKey(item) === key)
-              ? current.filter((item) => propsToKey(item) !== key)
-              : [...current, props],
-          );
+          onToggleModifier(props);
           return;
         }
 
