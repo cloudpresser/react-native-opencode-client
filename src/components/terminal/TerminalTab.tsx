@@ -330,11 +330,22 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       xtermRef.current?.focus();
     });
   }, [modifierKeysActive]);
+
+  const focusTerminal = useCallback(() => {
+    xtermRef.current?.focus();
+    requestAnimationFrame(() => {
+      xtermRef.current?.focus();
+    });
+    setTimeout(() => {
+      xtermRef.current?.focus();
+    }, 32);
+  }, []);
   sendBytesRef.current = sendBytes;
 
   const handleTerminalData = useCallback((data: string) => {
     sendBytesRef.current(encoder.encode(data));
-  }, []);
+    focusTerminal();
+  }, [focusTerminal]);
 
   const handleTerminalLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -350,6 +361,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
 
     requestAnimationFrame(() => {
       xtermRef.current?.fit();
+      xtermRef.current?.focus();
     });
   }, []);
 
@@ -396,6 +408,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         activeModifiers={modifierKeysActive}
         setActiveModifiers={setModifierKeysActive}
         sendBytes={sendBytes}
+        focusTerminal={focusTerminal}
       />
     </ControllerKeyboardAvoidingView>
   );
@@ -406,11 +419,13 @@ function KeyboardToolbar({
   activeModifiers,
   setActiveModifiers,
   sendBytes,
+  focusTerminal,
 }: {
   colors: ReturnType<typeof useThemeColors>;
   activeModifiers: KeyboardToolbarModifierButtonProps[];
   setActiveModifiers: React.Dispatch<React.SetStateAction<KeyboardToolbarModifierButtonProps[]>>;
   sendBytes: (bytes: Uint8Array<ArrayBuffer>) => void;
+  focusTerminal: () => void;
 }) {
   const handleToggleModifier = useCallback((modifier: KeyboardToolbarModifierButtonProps) => {
     const key = propsToKey(modifier);
@@ -419,7 +434,8 @@ function KeyboardToolbar({
         ? current.filter((item) => propsToKey(item) !== key)
         : [...current, modifier],
     );
-  }, [setActiveModifiers]);
+    focusTerminal();
+  }, [focusTerminal, setActiveModifiers]);
 
   return (
     <View
