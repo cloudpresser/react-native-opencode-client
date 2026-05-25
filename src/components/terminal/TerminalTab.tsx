@@ -320,10 +320,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       setSSHStatus('error');
     });
   }, [modifierKeysActive]);
-
-  useEffect(() => {
-    sendBytesRef.current = sendBytes;
-  }, [sendBytes]);
+  sendBytesRef.current = sendBytes;
 
   const handleTerminalData = useCallback((data: string) => {
     sendBytesRef.current(encoder.encode(data));
