@@ -46,11 +46,17 @@ type KeyboardToolbarButtonProps = KeyboardToolbarModifierButtonProps | KeyboardT
 
 function mapByteToCtrl(byte: number): number | null {
   if (byte === 32) return 0;
-  const uppercase = byte & 0b1101_1111;
-  if (uppercase >= 64 && uppercase <= 95) {
+  if (byte === 63) return 127;
+
+  const uppercase = byte >= 97 && byte <= 122 ? byte - 32 : byte;
+  if (uppercase >= 65 && uppercase <= 90) {
     return uppercase & 0x1f;
   }
-  if (byte === 63) return 127;
+
+  if (uppercase >= 91 && uppercase <= 95) {
+    return uppercase & 0x1f;
+  }
+
   return null;
 }
 
@@ -318,6 +324,10 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     void shell.sendData(bytes.buffer).catch((error) => {
       setErrorMessage(error instanceof Error ? error.message : String(error));
       setSSHStatus('error');
+    });
+
+    requestAnimationFrame(() => {
+      xtermRef.current?.focus();
     });
   }, [modifierKeysActive]);
   sendBytesRef.current = sendBytes;
