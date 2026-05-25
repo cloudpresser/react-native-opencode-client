@@ -231,12 +231,18 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     listenerIdRef.current = id;
   }, []);
 
+  const focusTerminalInput = useCallback(() => {
+    xtermRef.current?.setSystemKeyboardEnabled(true);
+    xtermRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     if (!terminalReady || !shellRef.current) {
       return;
     }
 
     attachShellListener(shellRef.current);
+    xtermRef.current?.setSystemKeyboardEnabled(true);
     xtermRef.current?.focus();
   }, [attachShellListener, terminalReady]);
 
@@ -287,7 +293,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
 
       if (terminalReady) {
         attachShellListener(shell);
-        xtermRef.current?.focus();
+        focusTerminalInput();
       }
     } catch (err: any) {
       const msg = err?.message || String(err);
@@ -296,7 +302,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
       xtermRef.current?.write(encoder.encode(`\r\nConnection failed: ${msg}\r\n`));
       await cleanupShell();
     }
-  }, [attachShellListener, cleanupShell, russhReady, sshConfig]);
+  }, [attachShellListener, cleanupShell, focusTerminalInput, russhReady, sshConfig]);
 
   const handleDisconnect = useCallback(async () => {
     await cleanupShell();
@@ -320,7 +326,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         bytes = modifier.applyModifierToBytes(bytes);
       });
 
-    Alert.alert("bytes:", bytes.toString())
+    // Alert.alert("bytes:", bytes.toString())
     void shell.sendData(bytes.buffer).catch((error) => {
       setErrorMessage(error instanceof Error ? error.message : String(error));
       setSSHStatus('error');
@@ -345,15 +351,15 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
 
     requestAnimationFrame(() => {
       xtermRef.current?.fit();
-      xtermRef.current?.focus();
+      focusTerminalInput();
     });
-  }, []);
+  }, [focusTerminalInput]);
 
   const handleTerminalInitialized = useCallback(() => {
     setTerminalReady(true);
-    xtermRef.current?.focus();
+    focusTerminalInput();
     xtermRef.current?.fit();
-  }, []);
+  }, [focusTerminalInput]);
 
   if (!viewReady) {
     return <View className="flex-1 bg-surface-elevated" />;

@@ -1,0 +1,103 @@
+diff --git a/node_modules/@fressh/react-native-xtermjs-webview/dist/index.d.ts b/node_modules/@fressh/react-native-xtermjs-webview/dist/index.d.ts
+index f7337ec..d939a91 100644
+--- a/node_modules/@fressh/react-native-xtermjs-webview/dist/index.d.ts
++++ b/node_modules/@fressh/react-native-xtermjs-webview/dist/index.d.ts
+@@ -23,6 +23,7 @@ export type XtermWebViewHandle = {
+     flush: () => void;
+     clear: () => void;
+     focus: () => void;
++    setSystemKeyboardEnabled: (enabled: boolean) => void;
+     resize: (size: {
+         cols: number;
+         rows: number;
+diff --git a/node_modules/@fressh/react-native-xtermjs-webview/dist/index.js b/node_modules/@fressh/react-native-xtermjs-webview/dist/index.js
+index 2632d2d..197ac11 100644
+--- a/node_modules/@fressh/react-native-xtermjs-webview/dist/index.js
++++ b/node_modules/@fressh/react-native-xtermjs-webview/dist/index.js
+@@ -101,7 +101,26 @@ function se({
+   }, []);
+   const E = a(() => {
+     n({ type: "fit" });
+-  }, [n]), g = a(() => {
++  }, [n]), H = a((t) => {
++    const s = y.current;
++    if (!s) return;
++    const r = `
++(() => {
++  const ta = document.querySelector('.xterm-helper-textarea');
++  if (!ta) return true;
++  ta.setAttribute('inputmode', '${t ? "verbatim" : "none"}');
++  ta.tabIndex = ${t ? 0 : -1};
++  if (${t ? 'true' : 'false'}) {
++    ta.removeAttribute('readonly');
++    ta.focus();
++  } else {
++    ta.setAttribute('readonly', 'true');
++    ta.blur();
++  }
++  return true;
++})();`;
++    s.injectJavaScript(r), t && s.requestFocus();
++  }, []), g = a(() => {
+     D && E();
+   }, [D, E]), k = S(null);
+   L(() => {
+@@ -118,6 +137,7 @@ function se({
+       var t;
+       n({ type: "focus" }), (t = y.current) == null || t.requestFocus();
+     },
++    setSystemKeyboardEnabled: H,
+     resize: (t) => {
+       n({ type: "resize", cols: t.cols, rows: t.rows }), g(), k.current = t;
+     },
+diff --git a/node_modules/@fressh/react-native-xtermjs-webview/src/index.tsx b/node_modules/@fressh/react-native-xtermjs-webview/src/index.tsx
+index ea50f33..d6755d5 100644
+--- a/node_modules/@fressh/react-native-xtermjs-webview/src/index.tsx
++++ b/node_modules/@fressh/react-native-xtermjs-webview/src/index.tsx
+@@ -38,6 +38,7 @@ export type XtermWebViewHandle = {
+ 	flush: () => void; // force-flush outgoing writes
+ 	clear: () => void;
+ 	focus: () => void;
++	setSystemKeyboardEnabled: (enabled: boolean) => void;
+ 	resize: (size: { cols: number; rows: number }) => void;
+ 	fit: () => void;
+ };
+@@ -207,6 +208,30 @@ export function XtermJsWebView({
+ 		sendToWebView({ type: 'fit' });
+ 	}, [sendToWebView]);
+ 
++	const setSystemKeyboardEnabled = useCallback((enabled: boolean) => {
++		const webViewRef = webRef.current;
++		if (!webViewRef) return;
++		const js = `
++(() => {
++	const ta = document.querySelector('.xterm-helper-textarea');
++	if (!ta) return true;
++	ta.setAttribute('inputmode', ${enabled ? "'verbatim'" : "'none'"});
++	ta.tabIndex = ${enabled ? 0 : -1};
++	if (${enabled ? 'true' : 'false'}) {
++		ta.removeAttribute('readonly');
++		ta.focus();
++	} else {
++		ta.setAttribute('readonly', 'true');
++		ta.blur();
++	}
++	return true;
++})();`;
++		webViewRef.injectJavaScript(js);
++		if (enabled) {
++			webViewRef.requestFocus();
++		}
++	}, []);
++
+ 	const autoFitFn = useCallback(() => {
+ 		if (!autoFit) return;
+ 		fit();
+@@ -237,6 +262,7 @@ export function XtermJsWebView({
+ 			sendToWebView({ type: 'focus' });
+ 			webRef.current?.requestFocus();
+ 		},
++		setSystemKeyboardEnabled,
+ 		resize: (size: { cols: number; rows: number }) => {
+ 			sendToWebView({ type: 'resize', cols: size.cols, rows: size.rows });
+ 			autoFitFn();

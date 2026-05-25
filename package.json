@@ -14,7 +14,7 @@
     "preweb": "node scripts/build-theme.js",
     "web": "expo start --web",
     "release": "semantic-release",
-    "postinstall": "node scripts/build-theme.js"
+    "postinstall": "node scripts/build-theme.js && patch-package"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -65,6 +65,7 @@
     "@types/react": "~19.1.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "metro-core": "^0.83.3",
+    "patch-package": "^8.0.1",
     "semantic-release": "^25.0.2",
     "semantic-release-preconfigured-conventional-commits": "1.1.156",
     "typescript": "~5.9.2"
