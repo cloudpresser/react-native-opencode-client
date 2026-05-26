@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { memo, useState, useRef, useCallback, useEffect } from 'react';
-import { Alert, Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, Keyboard, Platform, Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -123,6 +123,7 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
   const listenerIdRef = useRef<bigint | null>(null);
   const xtermRef = useRef<XtermWebViewHandle | null>(null);
   const terminalLayoutRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const androidKeyboardVisibleRef = useRef(false);
 
   const [sshStatus, setSSHStatus] = useState<SSHConnectionStatus>('disconnected');
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -236,6 +237,29 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     xtermRef.current?.setSystemKeyboardEnabled(true);
     xtermRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+      androidKeyboardVisibleRef.current = true;
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      androidKeyboardVisibleRef.current = false;
+      requestAnimationFrame(() => {
+        xtermRef.current?.fit();
+        focusTerminalInput();
+      });
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+      androidKeyboardVisibleRef.current = false;
+    };
+  }, [focusTerminalInput]);
 
   const getTerminalPtySize = useCallback(async () => {
     const size = await xtermRef.current?.getSize();
@@ -375,6 +399,14 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
 
     terminalLayoutRef.current = { width: nextWidth, height: nextHeight };
 
+    if (
+      Platform.OS === 'android' &&
+      androidKeyboardVisibleRef.current &&
+      previous.width === nextWidth
+    ) {
+      return;
+    }
+
     requestAnimationFrame(() => {
       xtermRef.current?.fit();
       focusTerminalInput();
@@ -391,13 +423,8 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
     return <View className="flex-1 bg-surface-elevated" />;
   }
 
-  return (
-    <ControllerKeyboardAvoidingView
-      className="flex-1 bg-surface-elevated"
-      behavior="translate-with-padding"
-      keyboardVerticalOffset={headerHeight}
-      style={{ gap: 4 }}
-    >
+  const content = (
+    <>
       <SSHStatusLine
         status={sshStatus}
         errorMessage={errorMessage}
@@ -425,6 +452,25 @@ export default function TerminalTab({ session, server }: TerminalTabProps) {
         setActiveModifiers={setModifierKeysActive}
         sendBytes={sendBytes}
       />
+    </>
+  );
+
+  if (Platform.OS === 'android') {
+    return (
+      <View className="flex-1 bg-surface-elevated" style={{ gap: 4 }}>
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <ControllerKeyboardAvoidingView
+      className="flex-1 bg-surface-elevated"
+      behavior="translate-with-padding"
+      keyboardVerticalOffset={headerHeight}
+      style={{ gap: 4 }}
+    >
+      {content}
     </ControllerKeyboardAvoidingView>
   );
 }
