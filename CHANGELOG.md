@@ -1,3 +1,40 @@
+# [2.15.0](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.14.3...v2.15.0) (2026-05-26)
+
+
+### Bug Fixes
+
+* activate terminal toolbar keys on press-in ([f0bade2](https://github.com/cloudpresser/react-native-opencode-client/commit/f0bade26089f4cda5adbaa9e88aa78ac9a5a0d7f))
+* android composer directInput intercept ([36b777f](https://github.com/cloudpresser/react-native-opencode-client/commit/36b777fb7fbc430c55d90f39913666cbea098963))
+* android composer IME re-arming ([e7586bc](https://github.com/cloudpresser/react-native-opencode-client/commit/e7586bcc2a990f1dd71c5f9a5d6172c7f8d2c17f))
+* android composer IME re-arming ([29d80fb](https://github.com/cloudpresser/react-native-opencode-client/commit/29d80fb8fc48ede433d0ee02873f22f77c48ceb1))
+* apply patch from upstream fork ([fa3d9ac](https://github.com/cloudpresser/react-native-opencode-client/commit/fa3d9ac5c897300133bbed50b907a4db7d9464cf))
+* **build:** configure web bundler to metro for use dom support ([70eb371](https://github.com/cloudpresser/react-native-opencode-client/commit/70eb3712d63385899515cfefb6929b9fc1795d8c))
+* **config:** add missing babel.config.js ([5983c2c](https://github.com/cloudpresser/react-native-opencode-client/commit/5983c2c2ed566562bc7382430bb9800195b1ac0a))
+* **deps:** add @expo/metro-runtime required by expo dom components ([633db57](https://github.com/cloudpresser/react-native-opencode-client/commit/633db57d8f2c76d9264989e8b0bba82636576c76))
+* **deps:** add react-dom and react-native-web for use dom support ([e336fd3](https://github.com/cloudpresser/react-native-opencode-client/commit/e336fd339d86fd18947945631b54b77bba003f2d))
+* keep Android terminal stable under keyboard ([ac17e4c](https://github.com/cloudpresser/react-native-opencode-client/commit/ac17e4c962a120a817f2f4e1729b2f901a5c7994))
+* make terminal modifiers immediate ([05a5349](https://github.com/cloudpresser/react-native-opencode-client/commit/05a53497447c806ecb6ac3562a71f1e61db0fee5))
+* refine terminal modifier behavior ([9c4d9d5](https://github.com/cloudpresser/react-native-opencode-client/commit/9c4d9d580baa3e58709eca81722aed68a6ccd9f9))
+* refit terminal on layout changes ([0c8dd14](https://github.com/cloudpresser/react-native-opencode-client/commit/0c8dd14fd1682d2ea8098decdb31aaebd9f13746))
+* refocus terminal after device keyboard input ([d23e9ff](https://github.com/cloudpresser/react-native-opencode-client/commit/d23e9ffac05f1f0ed926c1891396e6b519960ee3))
+* shell PTY size ([f8e6a2e](https://github.com/cloudpresser/react-native-opencode-client/commit/f8e6a2e55d5ed08c8b317b1254fb6340b6b93cb7))
+* stabilize terminal modifier state ([a3008bc](https://github.com/cloudpresser/react-native-opencode-client/commit/a3008bc91efb532a6d0796d952dd79fff5db2e6f))
+* sync terminal modifier pipeline ([d6ac4dc](https://github.com/cloudpresser/react-native-opencode-client/commit/d6ac4dc6b7c667895ec6249c036a4438b923b7c5))
+* **terminal:** add missing dom flex style to fix squished terminal ([1d555f0](https://github.com/cloudpresser/react-native-opencode-client/commit/1d555f0e34f771e603125717243d0afa8a6444ea))
+* **terminal:** add TERM env setup and PTY size sync for Ghostty compat ([48ee351](https://github.com/cloudpresser/react-native-opencode-client/commit/48ee35180a50b2a870be7fd99339781f8f04cdce))
+* **terminal:** add WebGL renderer and stabilize Android WebView viewport ([f9665aa](https://github.com/cloudpresser/react-native-opencode-client/commit/f9665aa614461f4966f4f49ae2695be450d45afc))
+* **terminal:** fix rendering artifacts and container sizing issues ([2acf450](https://github.com/cloudpresser/react-native-opencode-client/commit/2acf4508a52506abd98e47591092c5448f2255c9))
+* **terminal:** improve xterm fit robustness and error handling ([ce59340](https://github.com/cloudpresser/react-native-opencode-client/commit/ce5934055f0bd9356f9f8a14cc467d6be17dd8d5))
+* **terminal:** inline xterm css to fix build ([134b522](https://github.com/cloudpresser/react-native-opencode-client/commit/134b522a60a7191011fa663422e664fa1fd0c65f))
+* **terminal:** use useDOMImperativeHandle for cross-boundary ref in XTerm ([7bfd0ac](https://github.com/cloudpresser/react-native-opencode-client/commit/7bfd0ac41ddf4172ebc9ebeb75d94dd29f2dc196))
+
+
+### Features
+
+* add terminal keyboard toolbar ([fcc3372](https://github.com/cloudpresser/react-native-opencode-client/commit/fcc3372b70d5017bb632fd12d76d02745e91f1f0))
+* migrate terminal to fressh stack ([b761ebd](https://github.com/cloudpresser/react-native-opencode-client/commit/b761ebd6aaa1ca1f9ce1ae5c2c9e2ede2a3f644a))
+* **terminal:** implement xterm.js using dom components ([0164033](https://github.com/cloudpresser/react-native-opencode-client/commit/01640335b4a029b886556f2d4dc0e43341209d2b))
+
 ## [2.14.3](https://github.com/cloudpresser/react-native-opencode-client/compare/v2.14.2...v2.14.3) (2026-05-24)
 
 
